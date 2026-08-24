@@ -19,9 +19,10 @@ Then in the session:
 /quick-review --help
 ```
 
-Install it as a package instead:
+Install it from npm or a local checkout:
 
 ```bash
+pi install npm:@alexjercan/quick-review
 pi install /path/to/quick-review
 ```
 

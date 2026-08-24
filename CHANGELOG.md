@@ -7,6 +7,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-24
+
+### Packaging
+
+- Publish the Pi package as `@alexjercan/quick-review` for installation from npm and discovery in the Pi package gallery.
+- Add an automated, provenance-attested npm and GitHub release workflow for version tags.
+
 ## [0.1.0] - 2026-08-24
 
 ### Added
@@ -26,5 +33,6 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Ship Quick Review as a Pi package and as a Nix flake package for Linux and macOS.
 - Check locked Node dependencies and Nix packaging in GitHub Actions.
 
-[unreleased]: https://github.com/alexjercan/quick-review/compare/v0.1.0...HEAD
+[unreleased]: https://github.com/alexjercan/quick-review/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/alexjercan/quick-review/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/alexjercan/quick-review/releases/tag/v0.1.0

@@ -1,7 +1,13 @@
 # Release checklist
 
 Release from `master`. Use semantic versions and annotated tags in the form
-`vX.Y.Z`. Git tags are the stable references used by Pi and Nix consumers.
+`vX.Y.Z`. Git tags are the stable references used by Pi and Nix consumers. A
+version tag runs `.github/workflows/release.yml`, which publishes npm with
+provenance and creates the GitHub release.
+
+The npm package is `@alexjercan/quick-review`. Configure npm trusted publishing
+for repository `alexjercan/quick-review` and workflow `release.yml`. The first
+package version must be published manually before that package setting exists.
 
 ## Choose the version
 
@@ -57,27 +63,29 @@ Release from `master`. Use semantic versions and annotated tags in the form
 
 ## Tag and publish
 
-- [ ] Commit the version, changelog, and final documentation:
+- [ ] Commit the version, changelog, workflow, and final documentation:
 
   ```bash
-  git add package.json package-lock.json CHANGELOG.md RELEASE.md docs
+  git add package.json package-lock.json CHANGELOG.md RELEASE.md docs .github/workflows/release.yml
   git commit -m "Release vX.Y.Z"
   ```
 
-- [ ] Create an annotated tag on that commit:
-
-  ```bash
-  git tag -a vX.Y.Z -m "Quick Review vX.Y.Z"
-  ```
-
-- [ ] Push `master` and the tag:
+- [ ] Push `master`, then create and push an annotated tag on that commit:
 
   ```bash
   git push origin master
+  git tag -a vX.Y.Z -m "Quick Review vX.Y.Z"
   git push origin vX.Y.Z
   ```
 
-- [ ] Create a GitHub release from the tag. Copy the matching changelog section into its release notes.
+- [ ] Confirm the release workflow publishes npm and creates the GitHub release.
+- [ ] For the first npm publication only, publish before pushing the tag, then
+      configure npm trusted publishing. The workflow detects the existing version:
+
+  ```bash
+  npm login
+  npm publish --access public
+  ```
 
 ## Verify the published tag
 

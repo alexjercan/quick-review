@@ -1,8 +1,16 @@
 {
-  "name": "quick-review",
-  "version": "0.1.0",
+  "name": "@alexjercan/quick-review",
+  "version": "0.1.1",
   "description": "Pi extension that turns any git range into a reviewable walkthrough page",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alexjercan/quick-review.git"
+  },
+  "homepage": "https://github.com/alexjercan/quick-review#readme",
+  "bugs": {
+    "url": "https://github.com/alexjercan/quick-review/issues"
+  },
   "type": "module",
   "keywords": [
     "pi-package",
