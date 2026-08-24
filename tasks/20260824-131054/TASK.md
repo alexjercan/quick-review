@@ -1,6 +1,6 @@
 # Extract Quick Review into a standalone Pi extension
 
-- STATUS: IN_PROGRESS
+- STATUS: CLOSED
 - PRIORITY: 60
 - TAGS: review, extension, extraction
 

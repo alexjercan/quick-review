@@ -21,12 +21,19 @@ architecture and conventions. Keep scope focused and inspect local sources
 before external research.
 """
 
-[preferences.review]
-keywords = { first = "review", second = "quick-review" }
+[preferences.independent-review]
+keywords = { review = "independent-review", order = "first", harness = "claude", model = "Opus", thinking = "xhigh" }
 guidance = """
 `/review` is the out-of-context reviewer. Repeat the work -> `/review` cycle,
-resolving its findings each round, until it approves. Then run `/quick-review`
-once as the final user approval gate.
+resolving its findings each round, until it approves.
+"""
+
+[preferences.quick-review]
+keywords = { review = "quick-review", order = "second", harness = "pi", mode = "rpc", model = "openai-codex/gpt-5.6-sol", thinking = "medium", extension = "npm:@alexjercan/quick-review@0.1.1" }
+guidance = """
+After independent review approves, run the standalone Quick Review extension in
+its separate Pi RPC agent once as the final user approval gate. Do not use these
+Pi RPC settings for independent review.
 """
 
 [preferences.verification]
