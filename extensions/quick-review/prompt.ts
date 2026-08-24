@@ -46,10 +46,20 @@ lines: 120 or 120-168
 
 Repeat the change block for every change worth a reviewer's attention.`;
 
-export function buildPrompt(plan: ReviewPlan): string {
+/**
+ * Build the walkthrough request.
+ *
+ * `inlineLimit` exists because a host may bound how much one message may carry.
+ * Above it the agent is pointed at the patch file instead, which every host can
+ * read.
+ */
+export function buildPrompt(
+  plan: ReviewPlan,
+  inlineLimit: number = INLINE_PATCH_LIMIT,
+): string {
   const { repository, baseRef, targetRef, baseRevision, revision } =
     plan.inputs;
-  const inline = Buffer.byteLength(plan.patch, "utf8") <= INLINE_PATCH_LIMIT;
+  const inline = Buffer.byteLength(plan.patch, "utf8") <= inlineLimit;
   const patch = inline
     ? `Exact base-to-target patch:\n\n\`\`\`diff\n${plan.patch}\n\`\`\``
     : `The patch is large. Read the exact base-to-target patch from ${plan.patchPath}.`;
