@@ -1,0 +1,44 @@
+{
+  "name": "quick-review",
+  "version": "0.1.0",
+  "description": "Pi extension that turns any git range into a reviewable walkthrough page",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "code-review"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "extensions",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "check": "npm run typecheck && npm test && npm run format:check",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "node --test --test-concurrency=1 tests/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions/quick-review/index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.2",
+    "@types/node": "24.12.4",
+    "prettier": "^3.8.3",
+    "typebox": "1.3.7",
+    "typescript": "5.9.3"
+  }
+}

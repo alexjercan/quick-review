@@ -1,6 +1,6 @@
 # Extract Quick Review into a standalone Pi extension
 
-- STATUS: OPEN
+- STATUS: IN_PROGRESS
 - PRIORITY: 60
 - TAGS: review, extension, extraction
 
@@ -68,6 +68,28 @@ below and keep only what earned its place.
   `.scufris.toml`.
 - Repository checks and Nix checks pass in both repos; released and
   pinned through the normal gate.
+
+## Progress
+
+- 2026-08-24: stage 1 and stage 2 are complete. Stage 3 is complete except the
+  release: packaging, the Nix package output, and five flake checks are in
+  `flake.nix` and `nix/`, but no tag was created and nothing was published,
+  because releasing is outside this request. Contract and concept docs are in
+  `docs/`, the extension in `extensions/quick-review/`.
+- 2026-08-24: an independent review raised eight findings and two residual
+  risks. All are resolved; the resolutions and the two bugs the new Pi harness
+  found are recorded in `DECISIONS.md`.
+- Stage 4 (scufris2 consumes it, in-repo pipeline removed) and stage 5
+  (nix.dotfiles pin) are not started and were out of scope for that request.
+- Design decisions, including everything dropped from the proof of concept, are
+  in `DECISIONS.md`. Verification, including the live Pi session run and the
+  rendered page inspection, is in `VERIFICATION.md` with artifacts under
+  `evidence/`.
+- Completion criteria met so far: `/quick-review` works on an arbitrary git
+  repository with chosen base and target refs; page interaction parity including
+  invalidation on change requests is verified in live use; the artifact, state,
+  and completion-event contracts are versioned. Repository checks and Nix checks
+  pass here. The scufris2 side, the release, and the pin remain.
 
 ## Migration and reference
 

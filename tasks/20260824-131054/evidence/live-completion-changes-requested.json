@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "outcome": "changes-requested",
+  "repository": "/tmp/claude-1000/-home-alex--cache-sprouts-quick-review-implement-quick-review/ddf4617c-ac72-4be1-bfbe-d2567aa24ad4/scratchpad/live/repo",
+  "baseRef": "main",
+  "targetRef": "HEAD",
+  "baseRevision": "516b086a7cfb6ece9a6bb326ed36ee669d70f085",
+  "revision": "ed68c210cb28ba6b9b69cd54448b8d7dc9b54534",
+  "identity": "8e1abb5c91622187469f811d69cf9852d9dd14b9befaa4dbe25f48f3280347ef",
+  "sections": 2,
+  "comments": [],
+  "overallComment": "Reject a missing or non-numeric quantity instead of returning NaN, and clamp the discount to 0..1.",
+  "questions": [],
+  "artifact": "/tmp/claude-1000/-home-alex--cache-sprouts-quick-review-implement-quick-review/ddf4617c-ac72-4be1-bfbe-d2567aa24ad4/scratchpad/live/state/ed68c210cb28-283aac39/walkthrough.md",
+  "state": "/tmp/claude-1000/-home-alex--cache-sprouts-quick-review-implement-quick-review/ddf4617c-ac72-4be1-bfbe-d2567aa24ad4/scratchpad/live/state/ed68c210cb28-283aac39/state.json",
+  "completedAt": "2026-08-24T11:25:58.988Z"
+}

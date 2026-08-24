@@ -1,0 +1,7 @@
+In-flight explain action while /quick-review-close ran:
+{
+  "ok": false,
+  "error": "the review page was closed"
+}
+Page after close: connection refused (server stopped listening).
+Session agent answering afterwards: "The Quick Review question is no longer open, so the answer could not be submitted."

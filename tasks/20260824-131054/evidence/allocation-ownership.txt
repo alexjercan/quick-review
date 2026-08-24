@@ -1,0 +1,22 @@
+Review-directory allocation ownership proof (final tree)
+
+Two reviews exist before allocation: one still open (walkthrough.md, state.json,
+patch.diff) and one decided as changes-requested (completion.json only, its
+patch already invalidated). A new plan is then forced to collide with both
+names, and afterwards a failing plan is forced to collide with the decided one.
+
+Digests are the first 16 hex characters of each file's SHA-256.
+
+before:
+  open    patch.diff 10d3857e66825b34 | state.json 677d4cc76959f89d | walkthrough.md 794bfb994ede0b1d
+  decided completion.json ef610bfb3e8f1bb3
+claimed after 3 names: 3e93cf33acf0-0000000000000003
+rollback after 2 names: planning failed
+after:
+  open    patch.diff 10d3857e66825b34 | state.json 677d4cc76959f89d | walkthrough.md 794bfb994ede0b1d
+  decided completion.json ef610bfb3e8f1bb3
+  root    3e93cf33acf0-0000000000000001 3e93cf33acf0-0000000000000002 3e93cf33acf0-0000000000000003
+
+Reading: the claim skipped both taken names and created its own; the rollback
+removed only the directory it had just created (0000000000000004 never appears);
+every byte of both existing reviews is unchanged.

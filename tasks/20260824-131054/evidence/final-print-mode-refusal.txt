@@ -1,0 +1,1 @@
+Extension error (command:quick-review): Quick Review: print mode cannot host a review page; run /quick-review from an interactive or RPC session

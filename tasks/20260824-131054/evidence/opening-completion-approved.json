@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "outcome": "approved",
+  "repository": "/tmp/claude-1000/-home-alex--cache-sprouts-quick-review-implement-quick-review/ddf4617c-ac72-4be1-bfbe-d2567aa24ad4/scratchpad/live4/repo",
+  "baseRef": "main",
+  "targetRef": "HEAD",
+  "baseRevision": "9e2a78a934d74a1eac96a08c6e55de1f01f4e400",
+  "revision": "3e93cf33acf0adcaa6e79e2f418e37db99aa137e",
+  "identity": "d6e1d14cd377d310cd85303d9fe65c9a66582860c1a1f9a3dd12a2bc4226307b",
+  "sections": 1,
+  "comments": [],
+  "overallComment": "Approved after the opening-window fix.",
+  "questions": [],
+  "artifact": "/tmp/claude-1000/-home-alex--cache-sprouts-quick-review-implement-quick-review/ddf4617c-ac72-4be1-bfbe-d2567aa24ad4/scratchpad/live4/state/3e93cf33acf0-cb5dca02/walkthrough.md",
+  "state": "/tmp/claude-1000/-home-alex--cache-sprouts-quick-review-implement-quick-review/ddf4617c-ac72-4be1-bfbe-d2567aa24ad4/scratchpad/live4/state/3e93cf33acf0-cb5dca02/state.json",
+  "completedAt": "2026-08-24T12:58:28.840Z"
+}

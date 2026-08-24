@@ -1,0 +1,7 @@
+Live opening-window lifecycle proof (final tree)
+
+1. /quick-review opened a page; the review directory held patch.diff, state.json, walkthrough.md.
+2. /quick-review-close closed the page (connection refused afterwards) and kept the record:
+   patch.diff state.json walkthrough.md
+3. A fresh /quick-review started in the same session, opened a new page, and was approved.
+   Both review directories survive; only the approved one carries completion.json.
