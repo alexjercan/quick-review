@@ -1,0 +1,43 @@
+[preferences.tracking]
+keywords = { tool = "tatr", scope = "one-task-per-request" }
+guidance = """
+Use Tatr for substantial tracked work. Keep one task for one request and its
+follow-up work. Record decisions and verification evidence under the task.
+Skip task creation when the user explicitly requests untracked work.
+"""
+
+[preferences.workspace]
+keywords = { workspace = "sprout", base = "master" }
+guidance = """
+Use a Sprout workspace for project implementation. Keep the main checkout on
+master and land the completed Sprout explicitly.
+"""
+
+[preferences.implementation]
+keywords = { harness = "claude", model = "Opus", thinking = "xhigh" }
+guidance = """
+Follow applicable AGENTS.md instructions and the project's existing
+architecture and conventions. Keep scope focused and inspect local sources
+before external research.
+"""
+
+[preferences.review]
+keywords = { review = "independent-then-quick-review", order = "independent-first" }
+guidance = """
+Run an independent read-only reviewer against implementation work first.
+Resolve its findings before opening Quick Review for user approval.
+"""
+
+[preferences.verification]
+keywords = { verification = "focused", typescript = "npm run check", packaging = "nix flake check" }
+guidance = """
+Run the cheapest relevant focused checks first. Use focused integration tests
+and small end-to-end examples where practical.
+"""
+
+[preferences.landing]
+keywords = { landing = "sprout", gate = "quick-review-approval" }
+guidance = """
+Land approved Sprout work with the guarded Sprout landing operation. Never
+infer landing from worker completion or independent review.
+"""
