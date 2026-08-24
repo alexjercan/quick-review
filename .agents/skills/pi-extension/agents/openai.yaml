@@ -1,0 +1,6 @@
+interface:
+  display_name: "Pi extension"
+  short_description: "Develop Quick Review Pi integration"
+  default_prompt: "Use $pi-extension to change and verify the Quick Review Pi extension."
+policy:
+  allow_implicit_invocation: true

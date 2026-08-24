@@ -22,10 +22,11 @@ before external research.
 """
 
 [preferences.review]
-keywords = { review = "independent-then-quick-review", order = "independent-first" }
+keywords = { first = "review", second = "quick-review" }
 guidance = """
-Run an independent read-only reviewer against implementation work first.
-Resolve its findings before opening Quick Review for user approval.
+`/review` is the out-of-context reviewer. Repeat the work -> `/review` cycle,
+resolving its findings each round, until it approves. Then run `/quick-review`
+once as the final user approval gate.
 """
 
 [preferences.verification]

@@ -4,39 +4,31 @@ Global `~/AGENTS.md` applies. This file defines project-specific instructions.
 
 ## Project
 
-- `quick-review` is a standalone Pi package. It ships one extension that adds
-  `/quick-review` to any Pi session.
-- The session's own agent builds the walkthrough and answers page questions.
-  Never add a spawned generator, a sub-agent, or a workspace assumption.
-- Scufris is one consumer, not the owner. Nothing here may depend on Scufris,
-  Sprout, or a job model.
+- `quick-review` is a standalone Pi package that adds `/quick-review`.
+- The current session agent writes the walkthrough and answers page questions.
+- Never add a generator, sub-agent, workspace, Scufris, or job-model dependency.
 
 ## Workflow
 
-- Work directly on `master` unless the user requests an isolated worktree.
-- Use Tatr for requested tracked work. Keep one task for one request and its
-  follow-up work.
-- Keep decisions and verification evidence under `tasks/<id>/`.
-- Inspect installed Pi documentation and local source before network research.
+- Work on `master` unless the user requests an isolated worktree.
+- Use one Tatr task for requested tracked work and its follow-ups. Keep decisions
+  and verification under `tasks/<id>/`.
+- Read installed Pi documentation and local source before network research.
 
 ## Conventions
 
-- Keep Pi APIs in `extensions/quick-review/index.ts`. Every other module stays
-  plain Node so it can be tested without a Pi session.
-- Keep the versioned contract in `extensions/quick-review/contract.ts`. Changing
-  a format, a limit, or a field means changing a version and `docs/contract.md`.
-- Preserve the safety properties: exact-revision validation, a revision recheck
-  around every action, bounded artifact and message sizes, a loopback page
-  behind a random path token, and invalidation after a change request.
-- Add files with their first tested behaviour. Do not add empty placeholders.
-- Use strict TypeScript and Prettier. Type-stripping must keep working, so no
-  `enum`, no namespaces, and no parameter properties.
+- Keep Pi APIs in `extensions/quick-review/index.ts`; keep other modules plain
+  Node and independently testable.
+- Preserve exact-revision checks, bounded data, the token-protected loopback
+  page, and invalidation after a change request.
+- A contract format, field, or limit change requires a contract version change
+  and an update to `docs/contract.md`.
+- Use strict, type-strippable TypeScript and Prettier. Do not use enums,
+  namespaces, or parameter properties.
 - Put Pi APIs in `peerDependencies` and other runtime libraries in
   `dependencies`.
-- Keep `README.md` to the description and Quickstart. Put durable documentation
-  in `docs/`.
-- Prefer focused integration tests and small end-to-end examples. The page and
-  the git range are testable for real: drive the server over HTTP against a
-  temporary repository.
-- Run the cheapest relevant check. Use `npm run check` for TypeScript behaviour
-  and `nix flake check` for packaging and offline verification.
+- Keep `README.md` short. Put durable documentation in `docs/`.
+- Prefer focused integration tests with temporary Git repositories and real
+  loopback HTTP requests.
+- Run the cheapest relevant check. Use `npm run check` for behavior and
+  `nix flake check` for packaging.
