@@ -1,6 +1,6 @@
 # Add a Claude Code adapter: stdio MCP server and plugin
 
-- STATUS: IN_PROGRESS
+- STATUS: CLOSED
 - PRIORITY: 0
 - TAGS: claude, mcp
 
