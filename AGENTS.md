@@ -4,7 +4,8 @@ Global `~/AGENTS.md` applies. This file defines project-specific instructions.
 
 ## Project
 
-- `quick-review` is a standalone Pi package that adds `/quick-review`.
+- `quick-review` is a standalone package that adds `/quick-review` to Pi and to
+  Claude Code. One review core, one contract, one adapter per host.
 - The current session agent writes the walkthrough and answers page questions.
 - Never add a generator, sub-agent, workspace, Scufris, or job-model dependency.
 
@@ -17,8 +18,11 @@ Global `~/AGENTS.md` applies. This file defines project-specific instructions.
 
 ## Conventions
 
-- Keep Pi APIs in `extensions/quick-review/index.ts`; keep other modules plain
-  Node and independently testable.
+- Keep host APIs in an adapter: Pi in `extensions/quick-review/index.ts`, MCP in
+  `extensions/quick-review/mcp.ts`. Keep other modules plain Node and
+  independently testable.
+- The MCP adapter depends on no MCP library. Keep the stdio transport in
+  `extensions/quick-review/jsonrpc.ts` and keep `dependencies` empty.
 - Preserve exact-revision checks, bounded data, the token-protected loopback
   page, and invalidation after a change request.
 - A contract format, field, or limit change requires a contract version change

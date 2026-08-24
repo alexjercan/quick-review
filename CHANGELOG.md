@@ -7,6 +7,18 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+- Add a Claude Code adapter: a dependency-free stdio MCP server, the
+  `/quick-review` command, and a plugin manifest.
+- Add `quick_review_wait` so the review page can reach an agent that cannot be
+  interrupted. A wait that expires or is cancelled leaves the reviewer's
+  question queued.
+
+### Packaging
+
+- Ship the Claude Code plugin in the npm package and the Nix package.
+
 ## [0.1.1] - 2026-08-24
 
 ### Packaging

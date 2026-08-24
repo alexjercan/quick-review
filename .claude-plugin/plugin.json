@@ -1,0 +1,12 @@
+{
+  "name": "quick-review",
+  "version": "0.1.1",
+  "description": "Turn any git range into a walkthrough page that the session agent writes and answers questions about, and get back one versioned approval or change request.",
+  "author": {
+    "name": "Alex Jercan"
+  },
+  "homepage": "https://github.com/alexjercan/quick-review#readme",
+  "repository": "https://github.com/alexjercan/quick-review",
+  "license": "MIT",
+  "keywords": ["code-review", "git", "walkthrough", "mcp"]
+}

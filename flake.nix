@@ -24,11 +24,14 @@
             ./AGENTS.md
             ./LICENSE
             ./README.md
+            ./commands
             ./docs
             ./extensions
             ./package.json
             ./tests
             ./tsconfig.json
+            ./.claude-plugin
+            ./.mcp.json
             ./.prettierignore
           ];
         };
@@ -37,7 +40,10 @@
           root="$out/share/quick-review"
           mkdir -p "$root"
           cp -R ${./extensions} "$root/extensions"
+          cp -R ${./commands} "$root/commands"
           cp -R ${./docs} "$root/docs"
+          cp -R ${./.claude-plugin} "$root/.claude-plugin"
+          cp ${./.mcp.json} "$root/.mcp.json"
           cp ${./package.json} "$root/package.json"
           cp ${./README.md} "$root/README.md"
           cp ${./LICENSE} "$root/LICENSE"

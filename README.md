@@ -1,13 +1,13 @@
 # Quick Review
 
-Quick Review is a Pi extension. `/quick-review` turns a git range into a
-walkthrough page that the session's own agent writes and answers questions
-about, and returns one versioned approval or change request.
+`/quick-review` turns a git range into a walkthrough page that the session's own
+agent writes and answers questions about, and returns one versioned approval or
+change request. It runs in Pi and in Claude Code.
 
-## Quickstart
+## Pi
 
 ```bash
-pi -e ./extensions/quick-review/index.ts
+pi install npm:@alexjercan/quick-review   # or: pi install /path/to/quick-review
 ```
 
 Then in the session:
@@ -19,14 +19,17 @@ Then in the session:
 /quick-review --help
 ```
 
-Install it from npm or a local checkout:
+## Claude Code
 
-```bash
-pi install npm:@alexjercan/quick-review
-pi install /path/to/quick-review
+```
+/plugin marketplace add alexjercan/quick-review
+/plugin install quick-review@alexjercan
 ```
 
-With Nix:
+Then `/quick-review` with the same flags. Read `docs/claude.md` for how the
+review page reaches the agent there.
+
+## Nix
 
 ```bash
 nix build .#quick-review   # result/share/quick-review is a pi package

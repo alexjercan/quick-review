@@ -57,6 +57,22 @@ with one terminal decision: approve or request changes.
 | Loopback server and action rules  | `extensions/quick-review/server.ts`      |
 | Range planning and page wiring    | `extensions/quick-review/review.ts`      |
 | Pi command, tools, and events     | `extensions/quick-review/index.ts`       |
+| Event queue for a host that pulls | `extensions/quick-review/host.ts`        |
+| Newline-delimited JSON-RPC        | `extensions/quick-review/jsonrpc.ts`     |
+| MCP tools and stdio entry point   | `extensions/quick-review/mcp.ts`         |
 
-Only `index.ts` imports Pi. Everything else is plain Node, which is what makes
-the tests and the end-to-end proofs cheap to run.
+Only the adapters know a host. Everything else is plain Node, which is what
+makes the tests and the end-to-end proofs cheap to run.
+
+## Two hosts, one review
+
+`ReviewHost` is the whole seam between a review and the agent that owns it: one
+call to ask the agent something, one call to hand it the outcome.
+
+Pi pushes. The extension injects a message and triggers a turn, so the page can
+interrupt the agent whenever the reviewer acts. Claude Code has no such
+primitive, so there the agent pulls: it calls `quick_review_wait`, which blocks
+until the reviewer does something. Both adapters open the same review with the
+same `openReview`, against the same exact revisions, with the same limits.
+
+Read `docs/claude.md` for what that costs and what it implies.

@@ -1,0 +1,6 @@
+{
+  "review": {
+    "command": "node",
+    "args": ["${CLAUDE_PLUGIN_ROOT}/extensions/quick-review/mcp.ts"]
+  }
+}

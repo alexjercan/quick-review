@@ -76,18 +76,31 @@ in {
       test -f "$root/$entry"
       test ! -e "$root/node_modules"
       test ! -e "$root/tests"
+      # The Claude Code plugin ships with a command and a server that exists.
+      # Only a plugin-root `.mcp.json` is read; a `mcpServers` field in
+      # plugin.json is ignored, whether it holds an object or a path.
+      test -f "$root/.claude-plugin/plugin.json"
+      test -f "$root/.claude-plugin/marketplace.json"
+      test -f "$root/commands/quick-review.md"
+      ! jq -e '.mcpServers' "$root/.claude-plugin/plugin.json" > /dev/null
+      server=$(jq -r '.review.args[0]' "$root/.mcp.json" | sed 's|^[^/]*/||')
+      test -f "$root/$server"
       # The extension must not reach back into any other project at runtime.
       ! grep -rn "scufris\|sprout" "$root/extensions"
       # Only the Pi entry point may import Pi APIs.
       offenders=$(grep -rl '@earendil-works\|"typebox"' "$root/extensions" \
         | grep -v '/index\.ts$' || true)
       test -z "$offenders"
-      # Every non-Pi module loads on plain Node.
+      # Every non-Pi module loads on plain Node, the MCP entry point included:
+      # it has to run with no dependency tree at all.
       node --input-type=module -e "
         await import('$root/extensions/quick-review/review.ts');
         await import('$root/extensions/quick-review/page.ts');
         await import('$root/extensions/quick-review/options.ts');
         await import('$root/extensions/quick-review/prompt.ts');
+        await import('$root/extensions/quick-review/host.ts');
+        await import('$root/extensions/quick-review/jsonrpc.ts');
+        await import('$root/extensions/quick-review/mcp.ts');
       "
       touch "$out"
     '';

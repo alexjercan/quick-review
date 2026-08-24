@@ -1,0 +1,19 @@
+{
+  "name": "alexjercan",
+  "description": "Quick Review for Claude Code",
+  "owner": {
+    "name": "Alex Jercan"
+  },
+  "plugins": [
+    {
+      "name": "quick-review",
+      "description": "Turn any git range into a walkthrough page that the session agent writes and answers questions about, and get back one versioned approval or change request.",
+      "author": {
+        "name": "Alex Jercan"
+      },
+      "category": "review",
+      "source": "./",
+      "homepage": "https://github.com/alexjercan/quick-review#readme"
+    }
+  ]
+}
