@@ -20,6 +20,11 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Add independently versioned graph artifacts, atomic expansion deltas, graph
   state, and graph completion events for Pi and Claude Code.
 
+### Changed
+
+- Make the diff project graph the default `/quick-review` experience and remove
+  the linear walkthrough tools from both host adapters.
+
 ### Packaging
 
 - Ship the Claude Code plugin in the npm package and the Nix package.

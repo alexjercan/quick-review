@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseOptions, tokenize } from "../extensions/quick-review/options.ts";
 
-test("defaults leave the range to the planner", () => {
+test("defaults to the diff project graph", () => {
   const options = parseOptions("");
-  assert.deepEqual(options, { open: true, help: false });
+  assert.deepEqual(options, { scope: "diff", open: true, help: false });
 });
 
 test("reads separated and inline values", () => {

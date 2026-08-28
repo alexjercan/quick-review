@@ -6,15 +6,14 @@ export interface CommandOptions {
   baseRef?: string;
   targetRef?: string;
   repository?: string;
-  scope?: GraphScope;
+  scope: GraphScope;
   open: boolean;
   help: boolean;
 }
 
 export const USAGE = `/quick-review [--scope head|diff] [--base <ref>] [--target <ref>] [--repo <path>] [--no-open]
 
-  --scope <scope>  Open the progressive project graph for committed HEAD or a
-                   diff. Omit this flag for the legacy walkthrough page.
+  --scope <scope>  Analyze committed HEAD or a diff. Defaults to diff.
   --base <ref>     Base of the reviewed range. Defaults to the merge base with
                    the repository default branch.
   --target <ref>   Target of the reviewed range. Defaults to HEAD.
@@ -39,8 +38,9 @@ export function tokenize(input: string): string[] {
 }
 
 export function parseOptions(input: string): CommandOptions {
-  const options: CommandOptions = { open: true, help: false };
+  const options: CommandOptions = { scope: "diff", open: true, help: false };
   const tokens = tokenize(input);
+  let scopeSeen = false;
   for (let index = 0; index < tokens.length; index++) {
     const token = tokens[index]!;
     if (token === "--help" || token === "-h") {
@@ -62,8 +62,8 @@ export function parseOptions(input: string): CommandOptions {
       const value = inlineValue ?? tokens[++index];
       if (value !== "head" && value !== "diff")
         throw new Error(`--scope must be head or diff\n\n${USAGE}`);
-      if (options.scope !== undefined)
-        throw new Error("--scope was given twice");
+      if (scopeSeen) throw new Error("--scope was given twice");
+      scopeSeen = true;
       options.scope = value;
       continue;
     }

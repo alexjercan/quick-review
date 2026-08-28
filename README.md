@@ -1,9 +1,8 @@
 # Quick Review
 
-`/quick-review` opens an exact-revision review written and answered by the
-session's own agent. Use the progressive project decompiler for a committed
-HEAD snapshot or diff overlay. The version 1 linear walkthrough remains
-available during the compatibility release. It runs in Pi and Claude Code.
+`/quick-review` opens a progressive exact-revision project graph written and
+answered by the session's own agent. It analyzes a diff by default or a
+committed HEAD snapshot on request. It runs in Pi and Claude Code.
 
 ## Pi
 
@@ -14,10 +13,9 @@ pi install npm:@alexjercan/quick-review   # or: pi install /path/to/quick-review
 Then in the session:
 
 ```
-/quick-review --scope head
-/quick-review --scope diff --base origin/main --target HEAD
-/quick-review                         # legacy linear walkthrough
-/quick-review --base origin/main --target HEAD
+/quick-review                                      # diff graph
+/quick-review --base origin/main --target HEAD     # explicit diff graph
+/quick-review --scope head                         # committed snapshot
 /quick-review --repo /path/to/repo --no-open
 /quick-review --help
 ```

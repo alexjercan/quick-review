@@ -32,10 +32,9 @@
 
 ## Implementation gates
 
-- Add graph mode during one compatibility release. `/quick-review` and MCP
-  remain walkthrough mode unless `--scope diff|head` or `scope: "diff" | "head"`
-  is present. This makes the new command shape explicit and keeps old clients
-  working.
+- Make the project graph the only host-adapter experience. Plain
+  `/quick-review` and unscoped MCP start default to diff; `--scope head` selects
+  a committed snapshot. Do not expose the linear walkthrough submission tool.
 - Keep `approved` and `changes-requested` in both scopes. In HEAD scope,
   approval accepts the exact committed architecture snapshot; it does not claim
   that a diff is ready to merge.
@@ -47,10 +46,7 @@
 
 ## Compatibility direction
 
-- Do not mutate walkthrough contract version 1 in place. Introduce a separately
-  versioned graph artifact and graph state, then document how the existing
-  completion event refers to them. Any changed completion field or meaning
-  requires a completion contract version change.
-- Keep the existing review available until graph mode completes the same Pi and
-  MCP lifecycle proofs. Remove or migrate the old path only in a later explicit
-  compatibility decision.
+- Keep graph artifact, state, delta, and completion versions independent. The
+  old walkthrough implementation can remain as internal source while planning
+  and Git behavior are reused, but Pi and MCP no longer register its tools or
+  route commands to its page.

@@ -1,12 +1,12 @@
 {
   "name": "quick-review",
   "version": "0.1.1",
-  "description": "Open progressive exact-revision project graphs or walkthrough reviews built by the current session agent.",
+  "description": "Open progressive exact-revision project graphs built by the current session agent.",
   "author": {
     "name": "Alex Jercan"
   },
   "homepage": "https://github.com/alexjercan/quick-review#readme",
   "repository": "https://github.com/alexjercan/quick-review",
   "license": "MIT",
-  "keywords": ["code-review", "git", "walkthrough", "architecture-graph", "mcp"]
+  "keywords": ["code-review", "git", "architecture-graph", "mcp"]
 }

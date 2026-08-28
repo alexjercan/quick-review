@@ -2,8 +2,8 @@
 
 Quick Review runs in Claude Code as a plugin. The plugin carries a stdio MCP
 server and the `/quick-review` command. The review itself is the one described
-in `docs/concept.md`: the same legacy walkthrough or progressive project graph,
-the same loopback security, and the same exact-revision checks.
+in `docs/concept.md`: the same progressive project graph, loopback security,
+and exact-revision checks.
 
 ## Install
 
@@ -35,8 +35,7 @@ So the direction reverses. The agent calls `quick_review_wait`, which blocks
 until the page produces an event, and answers what it gets:
 
 ```
-quick_review_start         ->  instructions for a walkthrough or graph scope
-quick_review_submit        ->  the legacy page opens
+quick_review_start         ->  instructions for an exact graph scope
 quick_review_graph_submit  ->  the project decompiler opens
 quick_review_wait          ->  enhancement, question, or outcome
 quick_review_graph_expand  ->  an enhanced subtree reaches the page

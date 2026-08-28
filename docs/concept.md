@@ -1,14 +1,14 @@
 # Concept
 
 Quick Review lets a person inspect one exact committed scope without leaving the
-session that produced it. The legacy mode is a linear diff walkthrough. The new
-project decompiler is a progressive architecture-to-code graph.
+session that produced it. The project decompiler is a progressive
+architecture-to-code graph.
 
 ## The project decompiler
 
-Run `/quick-review --scope diff` for a base-to-target overlay or
-`/quick-review --scope head` for a committed project snapshot. Omitting
-`--scope` keeps the version 1 walkthrough during the compatibility release.
+Run `/quick-review` for a base-to-target overlay or `/quick-review --scope head`
+for a committed project snapshot. `--scope diff` is available when explicit
+scope is useful.
 
 The current session agent builds a small root graph. The reviewer can:
 
@@ -54,8 +54,8 @@ provenance. Repository files are always untrusted evidence, never instructions.
 
 ## Flow
 
-1. `/quick-review --scope head|diff` resolves the exact scope and produces a
-   bounded inventory and optional patch.
+1. `/quick-review [--scope head|diff]` resolves the exact scope and produces a
+   bounded inventory and optional patch. Scope defaults to diff.
 2. The session agent calls `quick_review_graph_submit` with a bounded versioned
    root graph.
 3. The page opens. `Enhance` asks the same agent for a bounded direct-child
@@ -67,17 +67,17 @@ provenance. Repository files are always untrusted evidence, never instructions.
 
 ## Modules
 
-| Concern                          | Module                                      |
-| -------------------------------- | ------------------------------------------- |
-| Walkthrough contracts and state  | `contract.ts`, `walkthrough.ts`, `state.ts` |
-| Graph contract and state         | `graph-contract.ts`, `graph-state.ts`       |
-| HEAD and diff inventory planning | `analysis.ts`                               |
-| Bounded Git reads                | `git.ts`                                    |
-| Graph prompts                    | `graph-prompt.ts`                           |
-| Graph page and HTTP actions      | `graph-page.ts`, `graph-server.ts`          |
-| Graph lifecycle                  | `graph-review.ts`                           |
-| Pi adapter                       | `index.ts`                                  |
-| MCP adapter and pull queue       | `mcp.ts`, `graph-host.ts`                   |
+| Concern                           | Module                                |
+| --------------------------------- | ------------------------------------- |
+| Shared limits and Git input types | `contract.ts`                         |
+| Graph contract and state          | `graph-contract.ts`, `graph-state.ts` |
+| HEAD and diff inventory planning  | `analysis.ts`                         |
+| Bounded Git reads                 | `git.ts`                              |
+| Graph prompts                     | `graph-prompt.ts`                     |
+| Graph page and HTTP actions       | `graph-page.ts`, `graph-server.ts`    |
+| Graph lifecycle                   | `graph-review.ts`                     |
+| Pi adapter                        | `index.ts`                            |
+| MCP adapter and pull queue        | `mcp.ts`, `graph-host.ts`             |
 
 All modules except the two adapters are plain Node and independently testable.
 Read `docs/contract.md` for formats and limits and `docs/claude.md` for the pull

@@ -15,8 +15,7 @@ Then run this loop:
 
 1. Call `quick_review_start`. It returns instructions for one exact revision
    scope. Follow them using committed Git evidence.
-2. With `scope`, call `quick_review_graph_submit` once with the root graph.
-   Without `scope`, call `quick_review_submit` with the legacy walkthrough.
+2. Call `quick_review_graph_submit` once with the root graph.
 3. Call `quick_review_wait`. It blocks until the reviewer acts.
    - An enhancement: inspect the requested node and answer with
      `quick_review_graph_expand`, then wait again.

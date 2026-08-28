@@ -1,7 +1,7 @@
 {
   "name": "@alexjercan/quick-review",
   "version": "0.1.1",
-  "description": "Progressive exact-revision project graphs and walkthrough reviews for Pi and Claude Code",
+  "description": "Progressive exact-revision project graph reviews for Pi and Claude Code",
   "license": "MIT",
   "repository": {
     "type": "git",

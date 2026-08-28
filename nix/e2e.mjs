@@ -1,10 +1,3 @@
-/**
- * End-to-end proof against the packaged extension.
- *
- * Builds a real repository, opens the real review page, drives it over HTTP,
- * approves it, and writes the rendered page and completion event to $out.
- */
-
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -16,11 +9,14 @@ const out = process.env.out;
 assert.ok(packageRoot, "QUICK_REVIEW_PACKAGE is required");
 assert.ok(out, "out is required");
 
-const { planReview, openReview } = await import(
-  `${packageRoot}/extensions/quick-review/review.ts`
+const { planAnalysis } = await import(
+  `${packageRoot}/extensions/quick-review/analysis.ts`
 );
-const { parseWalkthrough } = await import(
-  `${packageRoot}/extensions/quick-review/walkthrough.ts`
+const { parseProjectGraph, parseGraphDelta } = await import(
+  `${packageRoot}/extensions/quick-review/graph-contract.ts`
+);
+const { openGraphReview } = await import(
+  `${packageRoot}/extensions/quick-review/graph-review.ts`
 );
 
 const repository = mkdtempSync(join(tmpdir(), "quick-review-e2e-"));
@@ -62,46 +58,78 @@ git("commit", "-q", "-m", "Greet by name");
 process.env.QUICK_REVIEW_STATE_DIR = mkdtempSync(
   join(tmpdir(), "quick-review-state-"),
 );
-const plan = await planReview({ cwd: repository });
+const plan = await planAnalysis({ cwd: repository, scope: "diff" });
 assert.equal(plan.inputs.baseRef, "main");
 assert.equal(plan.inputs.targetRef, "HEAD");
 
-const artifact = `# Greet by name
-
-The greeting now takes a name.
-
-:::walkthrough
-version: 1
-status: ready
-revision: ${plan.inputs.revision}
-baseRevision: ${plan.inputs.baseRevision}
-files: ${plan.files}
-added: ${plan.added}
-removed: ${plan.removed}
-:::
-
-:::change
-id: greet-by-name
-importance: critical
-file: src/app.js
-lines: 1-3
-:::
-
-The helper now interpolates the caller name.
-
-\`\`\`diff
--  return 'hi';
-+  return \`hi \${name}\`;
-\`\`\`
-
-:::review
-Does the helper handle an empty name?
-:::
-`;
+const evidence = {
+  file: "src/app.js",
+  lines: "1-3",
+  revision: plan.inputs.revision,
+  confidence: "confirmed",
+};
+const artifact = JSON.stringify({
+  version: 1,
+  title: "Greeting architecture",
+  summary: "The greeting accepts a caller name.",
+  scope: "diff",
+  revision: plan.inputs.revision,
+  baseRevision: plan.inputs.baseRevision,
+  roots: ["greeting"],
+  nodes: [
+    {
+      id: "greeting",
+      parentId: null,
+      kind: "component",
+      title: "Greeting",
+      summary: "Formats the greeting.",
+      confidence: "confirmed",
+      overlay: "modified",
+      expandable: true,
+      file: "src/app.js",
+      lines: "1-3",
+      language: "javascript",
+      evidence: [evidence],
+    },
+  ],
+  edges: [],
+  guidance: [],
+});
+const delta = JSON.stringify({
+  version: 1,
+  revision: plan.inputs.revision,
+  parentId: "greeting",
+  nodes: [
+    {
+      id: "greeting.format",
+      parentId: "greeting",
+      kind: "symbol",
+      title: "greet",
+      summary: "Interpolates the name.",
+      confidence: "confirmed",
+      overlay: "modified",
+      expandable: false,
+      file: "src/app.js",
+      lines: "1-3",
+      language: "javascript",
+      evidence: [evidence],
+    },
+  ],
+  edges: [
+    {
+      id: "greeting-contains-format",
+      source: "greeting",
+      target: "greeting.format",
+      kind: "contains",
+      confidence: "confirmed",
+    },
+  ],
+});
 
 const completions = [];
-const review = await openReview(plan, parseWalkthrough(artifact), {
-  ask: async () => "The caller must always pass a name.",
+const review = await openGraphReview(plan, parseProjectGraph(artifact), {
+  ask: async () => "The caller must pass a name.",
+  expand: async () => parseGraphDelta(delta, plan.inputs.revision),
   complete: (event) => void completions.push(event),
 });
 
@@ -117,32 +145,24 @@ const act = async (body) => {
 };
 
 const first = await (await fetch(review.url)).text();
-assert.match(first, /data-card="greet-by-name"/);
-assert.match(first, new RegExp(plan.inputs.revision));
-assert.match(first, /data-action="approve"[^>]* disabled/);
-
-await act({ action: "explain", section: "greet-by-name" });
-const context = await act({ action: "context", section: "greet-by-name" });
-assert.match(context.context, /export function greet\(name\)/);
-const diff = await act({ action: "full-diff" });
-assert.match(diff.diff, /diff --git a\/src\/app\.js/);
+assert.match(first, /project decompiler/);
+assert.match(first, /data-payload=/);
+await act({ action: "enhance", node: "greeting" });
+await act({
+  action: "ask",
+  node: "greeting.format",
+  comment: "Does the caller supply a name?",
+});
+const code = await act({ action: "code", node: "greeting.format" });
+assert.match(code.code, /export function greet\(name\)/);
 await act({
   action: "add-comment",
-  section: "greet-by-name",
+  node: "greeting.format",
   comment: "An empty name still renders.",
 });
-await act({ action: "mark-viewed", section: "greet-by-name" });
-const approved = await act({
-  action: "approve",
-  comment: "Ship it after the empty name check.",
-});
-assert.equal(approved.state.outcome, "approved");
-
-const page = await (await fetch(review.url)).text();
-assert.match(page, /The caller must always pass a name\./);
-assert.match(page, /An empty name still renders\./);
-assert.match(page, /<main class="closed">/);
-assert.match(page, /class="outcome approved" data-outcome>Approved\./);
+await act({ action: "mark-viewed", node: "greeting" });
+await act({ action: "mark-viewed", node: "greeting.format" });
+await act({ action: "approve", comment: "Architecture matches." });
 await review.server.finished;
 await review.server.close();
 
@@ -150,14 +170,14 @@ assert.equal(completions.length, 1);
 const event = completions[0];
 assert.equal(event.version, 1);
 assert.equal(event.outcome, "approved");
-assert.equal(event.revision, plan.inputs.revision);
+assert.equal(event.scope, "diff");
 assert.equal(event.comments.length, 1);
 assert.equal(event.questions.length, 1);
 assert.deepEqual(JSON.parse(readFileSync(plan.completionPath, "utf8")), event);
 
 mkdirSync(out, { recursive: true });
-writeFileSync(join(out, "review.html"), page);
-writeFileSync(join(out, "walkthrough.md"), readFileSync(plan.artifactPath));
-writeFileSync(join(out, "state.json"), readFileSync(plan.statePath));
+writeFileSync(join(out, "review.html"), first);
+writeFileSync(join(out, "graph.json"), readFileSync(plan.artifactPath));
+writeFileSync(join(out, "graph-state.json"), readFileSync(plan.statePath));
 writeFileSync(join(out, "completion.json"), readFileSync(plan.completionPath));
-console.log(`rendered ${page.length} bytes of review page`);
+console.log(`rendered ${first.length} bytes of project decompiler page`);
