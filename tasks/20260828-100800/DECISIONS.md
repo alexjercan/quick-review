@@ -57,8 +57,12 @@
   scrolling.
 - Enhancement reflows the expanded container and all ancestor containers, then
   packs the root graph into non-overlapping rows.
-- Size collapsed nodes from their visible summary and highlighted code instead
-  of clipping content to one uniform card height.
+- Size nodes from their complete visible summary and highlighted code instead
+  of clipping content to one uniform card height. Code blocks expand their node
+  in both axes; they do not introduce an internal scrollbar.
+- Dragging any non-interactive part of a node moves that node. Disable text
+  selection on graph nodes so a body drag cannot accidentally highlight prose.
+  Buttons, inputs, and question editors keep their normal interaction.
 - Render questions in one fixed top-level overlay layer. Nested stacking
   contexts cannot place a graph node above that layer.
 

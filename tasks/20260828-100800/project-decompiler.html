@@ -445,6 +445,7 @@
         border-left: 3px solid var(--blue);
         background: rgba(36, 36, 36, 0.98);
         box-shadow: 0 8px 22px var(--shadow);
+        user-select: none;
         transition:
           width 130ms ease,
           height 130ms ease,
@@ -612,10 +613,9 @@
       }
 
       .code-block {
-        max-height: 160px;
         margin: 8px 0 0;
         padding: 9px;
-        overflow: auto;
+        overflow: visible;
         border: 1px solid #3c3c36;
         background: #171717;
         color: #d0d0d0;
@@ -625,7 +625,6 @@
       }
 
       .detail-2 .code-block {
-        max-height: 235px;
         font-size: 11px;
       }
 
@@ -1268,13 +1267,18 @@
       }
 
       function collapsedSize(node) {
-        const codeLines = node.code ? node.code.split("\n").length : 0;
-        const codeHeight = codeLines ? 210 + Math.min(codeLines, 10) * 15 : 0;
+        const plainCode = node.code ? node.code.replace(/<[^>]*>/g, "") : "";
+        const codeLines = plainCode ? plainCode.split("\n") : [];
+        const longestLine = codeLines.reduce((longest, line) => Math.max(longest, line.length), 0);
+        const codeHeight = codeLines.length ? 210 + codeLines.length * 17 : 0;
+        const codeWidth = longestLine ? 55 + longestLine * 6.5 : 0;
+        const summaryLines = Math.max(1, Math.ceil(node.summary.length / 38));
+        const containerHeight = 125 + summaryLines * 18;
         const naturalHeight = node.children?.length
-          ? 145
-          : Math.max(170, codeHeight, node.role === "decompiler" ? 360 : 0);
+          ? Math.max(185, containerHeight)
+          : Math.max(185, codeHeight, node.role === "decompiler" ? 390 : 0);
         return {
-          width: Math.max(node.width || 0, node.role === "decompiler" ? 500 : 250),
+          width: Math.max(node.width || 0, codeWidth, node.role === "decompiler" ? 500 : 250),
           height: Math.max(node.height || 0, naturalHeight),
         };
       }
@@ -1360,7 +1364,6 @@
         const head = document.createElement("header");
         head.className = "node-head";
         head.innerHTML = `<span class="node-symbol">${node.role === "decompiler" ? "::" : node.children?.length ? "+" : "fn"}</span><span class="node-title">${node.title}</span><span class="node-kind">${node.kind}</span>`;
-        if (!options.projection) bindDrag(head, element, node, parent);
         head.addEventListener("click", () => select(node.id));
         element.append(head);
 
@@ -1429,6 +1432,7 @@
         }
 
         element.append(body);
+        if (!options.projection) bindDrag(element, element, node, parent);
         return element;
       }
 
@@ -1539,7 +1543,8 @@
 
       function bindDrag(handle, element, node, parent) {
         handle.addEventListener("pointerdown", (event) => {
-          if (event.button !== 0) return;
+          if (event.button !== 0 || event.target.closest("button, input, textarea")) return;
+          if (event.target.closest(".node") !== element) return;
           event.preventDefault();
           state.selected = node.id;
           node.z = ++state.z;

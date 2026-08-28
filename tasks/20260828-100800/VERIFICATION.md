@@ -29,7 +29,11 @@
   dimensions as its SVG view box.
 - Enhanced Git snapshot through both detail levels and checked DOM scroll size
   against allocated node size - passed. A second maximum-detail sweep expanded
-  every container and checked all 25 nodes - passed with no content overflow.
+  every container and checked all 25 nodes - passed with no node, body, or code
+  overflow in either axis. Code blocks have no internal size cap.
+- Drove a pointer drag from the prose area of Pi extension through Chromium's
+  DevTools Protocol. Both model coordinates increased and the browser selection
+  remained empty - passed.
 
 ## Scope
 
