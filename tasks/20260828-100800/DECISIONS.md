@@ -22,8 +22,24 @@
   this task. A live extractor would mix UI validation with language and project
   analysis concerns.
 
+## Use one nested analysis canvas
+
+- Do not navigate between graph pages or levels. Enhancing a node grows that
+  node in place and inserts its recovered internals into a nested canvas.
+- A nested graph moves with its owning node. Every visible node can also be
+  dragged within its current container.
+- Further enhancement happens on child nodes. Leaf nodes reveal more prose,
+  evidence, exact revision metadata, and syntax-highlighted code in two steps.
+- Put decompiler output on the graph as a first-class, prominent node. Keep
+  `Ask` and `Enhance` controls directly on each architecture, symbol, code, and
+  decompiler node.
+- Use the square panel language of the current Quick Review page with a
+  Gruber-inspired near-black, warm yellow, green, brown, red, and neutral color
+  scheme.
+
 ## Artifact
 
 - `project-decompiler.html` is the interactive PoC. Open it directly in a
-  browser. Double-click graph nodes to descend into the review core, page, and
-  action-server views.
+  browser. The review core starts expanded to demonstrate containment. Drag any
+  node, enhance `Review lifecycle` or `Action server` for a second nested graph,
+  and use `Ask` to attach a simulated session-agent explanation.
