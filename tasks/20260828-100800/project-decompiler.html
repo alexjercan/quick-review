@@ -203,7 +203,7 @@
 
       .tree-row {
         display: grid;
-        grid-template-columns: 14px 14px minmax(0, 1fr) 8px;
+        grid-template-columns: 14px 14px minmax(0, 1fr) 20px 8px;
         align-items: center;
         min-height: 28px;
         padding: 0 5px;
@@ -242,6 +242,29 @@
 
       .tree-icon {
         color: var(--blue);
+      }
+
+      .tree-tab {
+        color: var(--dim);
+        font-size: 9px;
+        text-align: right;
+      }
+
+      .tree-row.tab-open .tree-tab {
+        color: var(--yellow-2);
+      }
+
+      .tree-row.tab-active {
+        border-right-color: var(--yellow);
+      }
+
+      .tree-row.tab-active .tree-tab {
+        color: var(--yellow);
+        font-weight: 700;
+      }
+
+      .tree-row.not-revealed:not(:hover):not(.selected) {
+        opacity: 0.58;
       }
 
       .tree-label {
@@ -1782,16 +1805,26 @@
       function renderTree() {
         tree.replaceChildren();
         const root = document.createElement("div");
-        root.className = "tree-row selected";
-        root.innerHTML = `<span class="tree-twisty">v</span><span class="tree-icon">#</span><span class="tree-label">quick-review</span><span class="dot"></span>`;
+        root.className = `tree-row tab-open${state.activeTab === "canvas" ? " tab-active" : ""}`;
+        root.innerHTML = `<span class="tree-twisty">v</span><span class="tree-icon">#</span><span class="tree-label">quick-review</span><span class="tree-tab">${state.activeTab === "canvas" ? "[C]" : "C"}</span><span class="dot"></span>`;
+        root.addEventListener("click", () => navigateFromTree("canvas"));
         tree.append(root);
         for (const item of walk()) {
           const { node, depth } = item;
-          if (depth > 0 && !ancestorsExpanded(node.id)) continue;
+          const revealed = ancestorsExpanded(node.id);
           const row = document.createElement("div");
-          row.className = `tree-row depth-${Math.min(depth + 1, 3)}${state.selected === node.id ? " selected" : ""}`;
-          row.innerHTML = `<span class="tree-twisty">${node.children?.length ? node.expanded ? "v" : ">" : ""}</span><span class="tree-icon">${node.role === "decompiler" ? "::" : node.children?.length ? "+" : "fn"}</span><span class="tree-label">${node.title}</span><span class="dot ${node.status}"></span>`;
-          row.addEventListener("click", () => focusNode(node.id));
+          const tabOpen = state.tabs.includes(node.id);
+          const tabActive = state.activeTab === node.id;
+          row.className = [
+            "tree-row",
+            `depth-${Math.min(depth + 1, 3)}`,
+            state.selected === node.id ? "selected" : "",
+            tabOpen ? "tab-open" : "",
+            tabActive ? "tab-active" : "",
+            revealed ? "" : "not-revealed",
+          ].filter(Boolean).join(" ");
+          row.innerHTML = `<span class="tree-twisty">${node.children?.length ? node.expanded ? "v" : ">" : ""}</span><span class="tree-icon">${node.role === "decompiler" ? "::" : node.children?.length ? "+" : "fn"}</span><span class="tree-label">${node.title}</span><span class="tree-tab">${tabActive ? "[T]" : tabOpen ? "T" : ""}</span><span class="dot ${node.status}"></span>`;
+          row.addEventListener("click", () => navigateFromTree(node.id));
           tree.append(row);
         }
       }
@@ -1805,19 +1838,74 @@
         return true;
       }
 
-      function focusNode(id) {
+      function navigateFromTree(id) {
+        if (id === "canvas") {
+          state.activeTab = "canvas";
+          state.ask = null;
+          render();
+          centerCanvasOrigin();
+          status.textContent = "Returned to the project canvas.";
+          return;
+        }
         const found = findNode(id);
         if (!found) return;
-        let parent = found.parent;
+        const visibleHere = Boolean(canvas.querySelector(`[data-id="${id}"]`));
+        let destination = state.activeTab;
+        if (!visibleHere) {
+          if (state.tabs.includes(id)) destination = id;
+          else {
+            const ancestors = ancestorNodes(id);
+            destination = ancestors.find((node) => state.tabs.includes(node.id))?.id || "canvas";
+          }
+        }
+        revealForContext(found.node, destination);
+        state.activeTab = destination;
+        state.selected = id;
+        state.ask = null;
+        render();
+        requestAnimationFrame(() => centerRenderedNode(id, destination));
+        const label = destination === "canvas" ? "Project canvas" : `${findNode(destination)?.node.title} tab`;
+        status.textContent = `Routed ${found.node.title} to ${label}.`;
+      }
+
+      function ancestorNodes(id) {
+        const result = [];
+        let parent = findNode(id)?.parent;
         while (parent) {
-          parent.expanded = true;
+          result.push(parent);
           parent = findNode(parent.id)?.parent;
         }
-        state.selected = id;
-        render();
+        return result;
+      }
+
+      function revealForContext(node, contextId) {
+        if (contextId === node.id) return;
+        const ancestors = ancestorNodes(node.id);
+        for (const ancestor of ancestors) {
+          ancestor.expanded = true;
+          reflow(ancestor);
+          if (ancestor.id === contextId) break;
+        }
+        if (contextId === "canvas") reflowRoot();
+      }
+
+      function centerRenderedNode(id, contextId) {
         const element = canvas.querySelector(`[data-id="${id}"]`);
-        element?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
-        status.textContent = `Focused ${found.node.title} from the project structure.`;
+        if (!element) {
+          if (contextId === id) centerCanvasOrigin();
+          return;
+        }
+        const nodeRect = element.getBoundingClientRect();
+        const viewRect = viewport.getBoundingClientRect();
+        viewport.scrollBy({
+          left: nodeRect.left + nodeRect.width / 2 - (viewRect.left + viewRect.width / 2),
+          top: nodeRect.top + nodeRect.height / 2 - (viewRect.top + viewRect.height / 2),
+          behavior: "smooth",
+        });
+      }
+
+      function centerCanvasOrigin() {
+        viewport.scrollTo({ left: 0, top: 0, behavior: "smooth" });
       }
 
       function renderMode() {

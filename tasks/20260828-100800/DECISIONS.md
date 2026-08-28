@@ -69,6 +69,19 @@
 - Show a minimal 148x96 minimap in the lower-right corner. It contains only
   root-node bounds and the current viewport rectangle. Clicking it recenters the
   canvas; it has no labels or secondary controls.
+
+## Route project-tree navigation to existing contexts
+
+- A tree click must never be a no-op. If the node is visible in the active tab,
+  keep that tab and center the node.
+- Otherwise prefer an existing tab for the node, then the nearest open ancestor
+  tab. If neither exists, return to Project canvas. Never create a tab from a
+  tree click; `Focus` remains the explicit tab-creation action.
+- Expand the ancestor chain needed to reveal the target in the selected context,
+  then center the rendered node.
+- Keep every indexed node visible in Project structure. Dim nodes whose graph
+  ancestors are still collapsed, and mark open tabs with `T`, the active tab
+  with `[T]`, and Project canvas with `C` or `[C]`.
 - Size nodes from their complete visible summary and highlighted code instead
   of clipping content to one uniform card height. Code blocks expand their node
   in both axes; they do not introduce an internal scrollbar.

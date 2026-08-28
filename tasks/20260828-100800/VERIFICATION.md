@@ -46,6 +46,13 @@
   Firefox CSS properties.
 - Captured and inspected the 1600x1000 canvas with the lower-right minimap and
   no native viewport scrollbars.
+- Chromium tree-routing regression - passed with all 26 project and node rows.
+  Git snapshot stayed in the active Review core tab, Pi extension returned to
+  Project canvas, and planReview selected the nearer existing Review lifecycle
+  tab, expanded it, and became visible. Active `[T]` and `[C]` markers matched
+  each destination.
+- Captured and inspected the fully indexed project tree. Collapsed descendants
+  remain available but visually dim until navigation reveals them.
 
 ## Scope
 
