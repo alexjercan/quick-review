@@ -1,0 +1,1314 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Quick Review - Project Decompiler PoC</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0b0e11;
+        --panel: #11161b;
+        --panel-2: #171d23;
+        --panel-3: #1c242c;
+        --line: #2a343e;
+        --line-strong: #465563;
+        --text: #d8e0e7;
+        --muted: #7f8b96;
+        --dim: #58636e;
+        --cyan: #5bc0d1;
+        --green: #75c98d;
+        --yellow: #d9bd6a;
+        --red: #e07878;
+        --blue: #789ee8;
+        --purple: #aa89d8;
+        --shadow: rgba(0, 0, 0, 0.35);
+        --mono: "SFMono-Regular", "Cascadia Code", "Roboto Mono", Consolas,
+          monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--text);
+        font: 12px/1.5 var(--mono);
+      }
+
+      button,
+      input,
+      textarea {
+        font: inherit;
+      }
+
+      button {
+        color: inherit;
+      }
+
+      :focus-visible {
+        outline: 1px solid var(--cyan);
+        outline-offset: 2px;
+      }
+
+      .app {
+        display: grid;
+        grid-template:
+          "top top top" 44px
+          "left main right" minmax(0, 1fr)
+          "status status status" 25px /
+          238px minmax(440px, 1fr) 300px;
+        height: 100%;
+      }
+
+      .topbar {
+        grid-area: top;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        min-width: 0;
+        padding: 0 10px;
+        border-bottom: 1px solid var(--line);
+        background: #0e1317;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        flex: none;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+      }
+
+      .brand-mark {
+        display: grid;
+        place-items: center;
+        width: 25px;
+        height: 25px;
+        border: 1px solid var(--cyan);
+        color: var(--cyan);
+        font-size: 10px;
+      }
+
+      .brand small {
+        color: var(--muted);
+        font-weight: 400;
+      }
+
+      .divider {
+        width: 1px;
+        height: 22px;
+        background: var(--line);
+      }
+
+      .mode-switch {
+        display: flex;
+        padding: 2px;
+        border: 1px solid var(--line);
+        background: var(--bg);
+      }
+
+      .mode-switch button,
+      .tool-button,
+      .mini-button,
+      .action-button {
+        border: 0;
+        background: transparent;
+        cursor: pointer;
+      }
+
+      .mode-switch button {
+        padding: 3px 10px;
+        color: var(--muted);
+      }
+
+      .mode-switch button.active {
+        background: var(--panel-3);
+        color: var(--cyan);
+      }
+
+      .range {
+        overflow: hidden;
+        color: var(--muted);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .range code {
+        color: var(--yellow);
+      }
+
+      .top-spacer {
+        flex: 1;
+      }
+
+      .search {
+        width: min(270px, 28vw);
+        padding: 5px 9px;
+        border: 1px solid var(--line);
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .search::placeholder {
+        color: var(--dim);
+      }
+
+      .sidebar,
+      .inspector {
+        min-height: 0;
+        overflow: auto;
+        background: var(--panel);
+      }
+
+      .sidebar {
+        grid-area: left;
+        border-right: 1px solid var(--line);
+      }
+
+      .inspector {
+        grid-area: right;
+        border-left: 1px solid var(--line);
+      }
+
+      .pane-title {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 34px;
+        padding: 0 10px;
+        border-bottom: 1px solid var(--line);
+        background: #13191e;
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .mini-button {
+        padding: 2px 5px;
+        color: var(--muted);
+      }
+
+      .mini-button:hover,
+      .tool-button:hover {
+        color: var(--cyan);
+      }
+
+      .tree {
+        padding: 7px 5px 18px;
+      }
+
+      .tree-row {
+        display: grid;
+        grid-template-columns: 15px 14px minmax(0, 1fr) auto;
+        align-items: center;
+        min-height: 27px;
+        padding: 0 5px;
+        border: 1px solid transparent;
+        color: var(--muted);
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .tree-row:hover {
+        background: var(--panel-2);
+        color: var(--text);
+      }
+
+      .tree-row.selected {
+        border-color: #35505b;
+        background: #15242a;
+        color: var(--text);
+      }
+
+      .tree-row.child {
+        padding-left: 21px;
+      }
+
+      .tree-row.grandchild {
+        padding-left: 37px;
+      }
+
+      .twisty {
+        color: var(--dim);
+      }
+
+      .tree-icon {
+        color: var(--blue);
+      }
+
+      .tree-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .tree-badge {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--dim);
+      }
+
+      .tree-badge.changed {
+        background: var(--red);
+        box-shadow: 0 0 8px rgba(224, 120, 120, 0.45);
+      }
+
+      .tree-badge.impacted {
+        background: var(--yellow);
+      }
+
+      .legend {
+        margin: 8px 10px;
+        padding: 10px;
+        border: 1px solid var(--line);
+        background: var(--bg);
+        color: var(--muted);
+      }
+
+      .legend-row {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin: 4px 0;
+      }
+
+      .workspace {
+        grid-area: main;
+        display: grid;
+        grid-template-rows: 35px minmax(0, 1fr);
+        min-width: 0;
+        min-height: 0;
+        background-color: var(--bg);
+        background-image: radial-gradient(#222c34 0.8px, transparent 0.8px);
+        background-size: 18px 18px;
+      }
+
+      .workspace-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        padding: 0 10px;
+        border-bottom: 1px solid var(--line);
+        background: rgba(14, 19, 23, 0.96);
+      }
+
+      .breadcrumbs {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        overflow: hidden;
+      }
+
+      .crumb {
+        border: 0;
+        background: none;
+        color: var(--muted);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      .crumb:hover,
+      .crumb.current {
+        color: var(--cyan);
+      }
+
+      .crumb + .crumb::before {
+        content: "/";
+        margin-right: 7px;
+        color: var(--dim);
+      }
+
+      .workspace-tools {
+        display: flex;
+        gap: 3px;
+        margin-left: auto;
+      }
+
+      .tool-button {
+        min-width: 27px;
+        height: 25px;
+        border: 1px solid var(--line);
+        color: var(--muted);
+      }
+
+      .graph-viewport {
+        position: relative;
+        min-height: 0;
+        overflow: auto;
+      }
+
+      .graph {
+        position: relative;
+        width: 960px;
+        height: 610px;
+        transform: scale(var(--zoom, 1));
+        transform-origin: 0 0;
+        transition: transform 120ms ease;
+      }
+
+      .edges {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+      }
+
+      .edge {
+        fill: none;
+        stroke: #3b4a56;
+        stroke-width: 1.5;
+        marker-end: url(#arrow);
+      }
+
+      .edge.inferred {
+        stroke: #655c43;
+        stroke-dasharray: 5 5;
+      }
+
+      .graph-node {
+        position: absolute;
+        width: 174px;
+        min-height: 76px;
+        padding: 9px 10px;
+        border: 1px solid var(--line-strong);
+        border-left: 3px solid var(--blue);
+        background: rgba(20, 26, 32, 0.97);
+        box-shadow: 0 7px 20px var(--shadow);
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .graph-node:hover {
+        border-color: var(--cyan);
+      }
+
+      .graph-node.selected {
+        border-color: var(--cyan);
+        box-shadow: 0 0 0 1px var(--cyan), 0 8px 24px var(--shadow);
+      }
+
+      .graph-node.changed {
+        border-left-color: var(--red);
+      }
+
+      .graph-node.impacted {
+        border-left-color: var(--yellow);
+      }
+
+      .head-mode .graph-node.changed,
+      .head-mode .graph-node.impacted {
+        border-left-color: var(--blue);
+      }
+
+      .node-kind {
+        margin-bottom: 4px;
+        color: var(--muted);
+        font-size: 9px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .node-name {
+        overflow: hidden;
+        color: var(--text);
+        font-weight: 700;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .node-meta {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        margin-top: 7px;
+        color: var(--dim);
+        font-size: 10px;
+      }
+
+      .node-expand {
+        color: var(--cyan);
+      }
+
+      .empty-filter {
+        position: absolute;
+        top: 70px;
+        left: 60px;
+        display: none;
+        padding: 12px 15px;
+        border: 1px solid var(--yellow);
+        background: var(--panel);
+        color: var(--yellow);
+      }
+
+      .inspector-content {
+        padding: 13px;
+      }
+
+      .inspector-kicker {
+        margin: 0 0 3px;
+        color: var(--cyan);
+        font-size: 9px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .inspector h2 {
+        margin: 0;
+        font-size: 15px;
+      }
+
+      .path {
+        margin: 5px 0 12px;
+        color: var(--muted);
+        overflow-wrap: anywhere;
+      }
+
+      .summary {
+        margin: 0 0 13px;
+        color: #b7c1ca;
+      }
+
+      .facts {
+        display: grid;
+        grid-template-columns: 88px 1fr;
+        margin: 0 0 13px;
+        border-top: 1px solid var(--line);
+      }
+
+      .facts dt,
+      .facts dd {
+        margin: 0;
+        padding: 6px 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .facts dt {
+        color: var(--muted);
+      }
+
+      .status-changed {
+        color: var(--red);
+      }
+
+      .status-impacted {
+        color: var(--yellow);
+      }
+
+      .section-label {
+        margin: 15px 0 7px;
+        color: var(--muted);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .evidence {
+        padding: 8px 9px;
+        border-left: 2px solid var(--green);
+        background: var(--bg);
+        color: #aeb9c1;
+      }
+
+      .evidence code {
+        color: var(--green);
+      }
+
+      .code {
+        max-height: 210px;
+        margin: 0;
+        padding: 10px;
+        overflow: auto;
+        border: 1px solid var(--line);
+        background: #090c0f;
+        color: #aeb9c1;
+        font-size: 10px;
+        white-space: pre;
+      }
+
+      .code .add {
+        color: var(--green);
+      }
+
+      .code .del {
+        color: var(--red);
+      }
+
+      .actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 7px;
+        margin-top: 13px;
+      }
+
+      .action-button {
+        min-height: 31px;
+        border: 1px solid var(--line-strong);
+        background: var(--panel-2);
+        color: var(--text);
+      }
+
+      .action-button:hover {
+        border-color: var(--cyan);
+        color: var(--cyan);
+      }
+
+      .action-button.primary {
+        border-color: #337381;
+        background: #173039;
+        color: var(--cyan);
+      }
+
+      .ask-box {
+        display: none;
+        margin-top: 10px;
+      }
+
+      .ask-box.open {
+        display: block;
+      }
+
+      .ask-box textarea {
+        width: 100%;
+        min-height: 70px;
+        padding: 7px;
+        resize: vertical;
+        border: 1px solid var(--line-strong);
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .answer {
+        display: none;
+        margin-top: 9px;
+        padding: 9px;
+        border: 1px solid #31515a;
+        background: #102329;
+        color: #b8d7dc;
+      }
+
+      .answer.visible {
+        display: block;
+      }
+
+      .statusbar {
+        grid-area: status;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 0 9px;
+        border-top: 1px solid var(--line);
+        background: #0e1317;
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      .statusbar .ready {
+        color: var(--green);
+      }
+
+      .status-message {
+        margin-left: auto;
+        color: var(--cyan);
+      }
+
+      @media (max-width: 980px) {
+        .app {
+          grid-template:
+            "top top" 44px
+            "left main" minmax(0, 1fr)
+            "right right" 245px
+            "status status" 25px /
+            205px minmax(0, 1fr);
+        }
+
+        .inspector {
+          border-top: 1px solid var(--line);
+          border-left: 0;
+        }
+
+        .inspector-content {
+          display: grid;
+          grid-template-columns: minmax(220px, 1fr) minmax(260px, 1fr);
+          gap: 16px;
+        }
+
+        .inspector-content > :not(.inspector-main):not(.inspector-extra) {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body class="pr-mode">
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark">QR</span>
+          <span>project decompiler <small>/ proof of concept</small></span>
+        </div>
+        <span class="divider"></span>
+        <div class="mode-switch" aria-label="Analysis mode">
+          <button type="button" data-mode="head">HEAD</button>
+          <button type="button" class="active" data-mode="pr">PR DIFF</button>
+        </div>
+        <div class="range" data-range>
+          <code>master</code> 4d48eee..HEAD - 6 files, +312 -44
+        </div>
+        <span class="top-spacer"></span>
+        <input
+          class="search"
+          type="search"
+          placeholder="Filter nodes or symbols..."
+          aria-label="Filter graph nodes"
+        />
+      </header>
+
+      <aside class="sidebar">
+        <div class="pane-title">
+          Project structure
+          <button class="mini-button" type="button" title="Collapse all">--</button>
+        </div>
+        <div class="tree" data-tree></div>
+        <div class="legend">
+          <div class="legend-row">
+            <span class="tree-badge changed"></span> Changed in range
+          </div>
+          <div class="legend-row">
+            <span class="tree-badge impacted"></span> Transitively impacted
+          </div>
+          <div class="legend-row">
+            <span class="tree-badge"></span> Architecture context
+          </div>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <div class="workspace-head">
+          <nav class="breadcrumbs" data-breadcrumbs aria-label="Graph path"></nav>
+          <div class="workspace-tools">
+            <button class="tool-button" type="button" data-zoom="out" title="Zoom out">-</button>
+            <button class="tool-button" type="button" data-zoom="reset" title="Reset zoom">1:1</button>
+            <button class="tool-button" type="button" data-zoom="in" title="Zoom in">+</button>
+          </div>
+        </div>
+        <div class="graph-viewport">
+          <div class="graph" data-graph>
+            <svg class="edges" data-edges viewBox="0 0 960 610" aria-hidden="true">
+              <defs>
+                <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                  <path d="M0,0 L0,6 L8,3 z" fill="#3b4a56"></path>
+                </marker>
+              </defs>
+            </svg>
+            <div class="empty-filter" data-empty>No nodes match this filter.</div>
+          </div>
+        </div>
+      </main>
+
+      <aside class="inspector">
+        <div class="pane-title">Decompiler output</div>
+        <div class="inspector-content" data-inspector></div>
+      </aside>
+
+      <footer class="statusbar">
+        <span class="ready">analysis ready</span>
+        <span data-node-count>6 nodes / 7 edges</span>
+        <span>revision 4d48eeeceab3</span>
+        <span>guidance: AGENTS.md + pi-extension</span>
+        <span class="status-message" data-status>Double-click a node to open its internal graph.</span>
+      </footer>
+    </div>
+
+    <script>
+      const views = {
+        root: {
+          title: "quick-review",
+          parent: null,
+          nodes: [
+            {
+              id: "pi",
+              kind: "host adapter",
+              name: "Pi extension",
+              path: "extensions/quick-review/index.ts",
+              status: "changed",
+              x: 65,
+              y: 80,
+              summary: "Registers commands and tools, then routes page questions into the current Pi session.",
+              evidence: "Pi APIs stay in the adapter. Source: AGENTS.md",
+              code: "pi.registerCommand(\"quick-review\", { ... })\npi.registerTool(defineTool({\n  name: \"quick_review_submit\",\n  ...\n}))",
+            },
+            {
+              id: "mcp",
+              kind: "host adapter",
+              name: "Claude MCP",
+              path: "extensions/quick-review/mcp.ts",
+              status: "context",
+              x: 65,
+              y: 270,
+              summary: "Adapts the same review lifecycle to a pull-based MCP wait loop.",
+              evidence: "MCP adapter depends on no MCP library. Source: AGENTS.md",
+              code: "quick_review_start -> submit -> wait\n                     ^          |\n                     +-- answer-+",
+            },
+            {
+              id: "core",
+              kind: "component",
+              name: "Review core",
+              path: "extensions/quick-review/review.ts",
+              status: "changed",
+              x: 380,
+              y: 170,
+              expandable: "core",
+              summary: "Plans exact Git ranges, owns review state, and connects the page to a host-neutral ReviewHost.",
+              evidence: "ReviewHost is the only host seam. Confirmed by review.ts:46-56.",
+              code: "export interface ReviewHost {\n  ask(question): Promise<string>;\n  complete(event, warning?): Promise<void> | void;\n}",
+            },
+            {
+              id: "page",
+              kind: "interface",
+              name: "Loopback page",
+              path: "extensions/quick-review/page.ts",
+              status: "changed",
+              x: 690,
+              y: 70,
+              expandable: "page",
+              summary: "Renders review state and sends bounded actions to a token-protected loopback server.",
+              evidence: "Page action behavior is verified over real HTTP. Source: AGENTS.md",
+              code: "POST /<token>/action\n{ action: \"ask\", section, comment }",
+            },
+            {
+              id: "contract",
+              kind: "invariant boundary",
+              name: "Versioned contract",
+              path: "extensions/quick-review/contract.ts",
+              status: "impacted",
+              x: 380,
+              y: 395,
+              summary: "Defines identity, bounds, review state, and completion records shared by both hosts.",
+              evidence: "Format, field, or limit changes require a version bump. Source: AGENTS.md",
+              code: "ARTIFACT_VERSION = 1\nSTATE_VERSION = 1\nCOMPLETION_VERSION = 1",
+            },
+            {
+              id: "tests",
+              kind: "verification",
+              name: "Integration tests",
+              path: "tests/*.test.ts",
+              status: "impacted",
+              x: 690,
+              y: 350,
+              summary: "Exercises temporary Git repositories, real loopback requests, and both host adapters.",
+              evidence: "Focused integration tests are the preferred proof. Source: AGENTS.md",
+              code: "node --test --test-concurrency=1 tests/*.test.ts",
+            },
+          ],
+          edges: [
+            ["pi", "core", "calls"],
+            ["mcp", "core", "calls"],
+            ["core", "page", "opens"],
+            ["core", "contract", "conforms to"],
+            ["page", "contract", "persists", true],
+            ["tests", "core", "verifies"],
+            ["tests", "page", "verifies"],
+          ],
+        },
+        core: {
+          title: "Review core",
+          parent: "root",
+          nodes: [
+            {
+              id: "review",
+              kind: "orchestrator",
+              name: "review.ts",
+              path: "extensions/quick-review/review.ts",
+              status: "changed",
+              x: 380,
+              y: 70,
+              summary: "Owns planning, opening, exact-context reads, and the durable completion boundary.",
+              evidence: "Confirmed from exported planReview, verifyRange, and openReview functions.",
+              code: "planReview()\nverifyRange()\nopenReview()\ninvalidate()",
+            },
+            {
+              id: "git",
+              kind: "data source",
+              name: "git.ts",
+              path: "extensions/quick-review/git.ts",
+              status: "impacted",
+              x: 70,
+              y: 70,
+              summary: "Provides bounded reads from exact Git revisions.",
+              evidence: "Every page action rechecks the reviewed range.",
+              code: "resolveCommit()\nmergeBase()\npatch()\nshowFile()",
+            },
+            {
+              id: "server",
+              kind: "boundary",
+              name: "server.ts",
+              path: "extensions/quick-review/server.ts",
+              status: "changed",
+              x: 690,
+              y: 70,
+              expandable: "server",
+              summary: "Serializes page actions and enforces token, origin, revision, and terminal-state checks.",
+              evidence: "Loopback only, random token, no-store, strict Origin checks.",
+              code: "startReviewServer(document, state, actions)",
+            },
+            {
+              id: "state",
+              kind: "state store",
+              name: "state.ts",
+              path: "extensions/quick-review/state.ts",
+              status: "context",
+              x: 225,
+              y: 320,
+              summary: "Validates and persists state bound to one artifact identity.",
+              evidence: "State must match identity, revisions, and exact node IDs.",
+              code: "initialState(document)\nsaveState(path, state)\nloadState(path, document)",
+            },
+            {
+              id: "prompt",
+              kind: "agent protocol",
+              name: "prompt.ts",
+              path: "extensions/quick-review/prompt.ts",
+              status: "changed",
+              x: 535,
+              y: 320,
+              summary: "Asks the current session agent for walkthroughs and answers without spawning another model.",
+              evidence: "The current session agent owns generation and questions.",
+              code: "buildPrompt(plan)\nbuildQuestionPrompt(question)\nbuildCompletionMessage(...) ",
+            },
+          ],
+          edges: [
+            ["git", "review", "exact revisions"],
+            ["review", "server", "opens"],
+            ["review", "state", "persists"],
+            ["server", "state", "mutates"],
+            ["server", "review", "finalizes"],
+            ["prompt", "review", "describes", true],
+          ],
+        },
+        page: {
+          title: "Loopback page",
+          parent: "root",
+          nodes: [
+            {
+              id: "index-view",
+              kind: "view",
+              name: "Change index",
+              path: "page.ts:index",
+              status: "context",
+              x: 70,
+              y: 80,
+              summary: "Lists review sections and viewed progress.",
+              evidence: "Server-rendered, escaped HTML.",
+              code: "function index(document, state): string",
+            },
+            {
+              id: "card-view",
+              kind: "view",
+              name: "Change card",
+              path: "page.ts:card",
+              status: "changed",
+              x: 380,
+              y: 80,
+              summary: "Combines explanation, exact hunk, questions, and comments.",
+              evidence: "One card is bound to one walkthrough section.",
+              code: "function card(position, total, section, state): string",
+            },
+            {
+              id: "action-client",
+              kind: "controller",
+              name: "Action client",
+              path: "page.ts:PAGE_JS",
+              status: "changed",
+              x: 690,
+              y: 80,
+              summary: "Posts actions and reconciles returned review state.",
+              evidence: "Uses textContent for dynamic reviewer and agent content.",
+              code: "async function act(control, action) {\n  await fetch(\"action\", { method: \"POST\", ... })\n}",
+            },
+            {
+              id: "ask-flow",
+              kind: "interaction",
+              name: "Ask agent",
+              path: "page.ts -> server.ts -> ReviewHost",
+              status: "impacted",
+              x: 380,
+              y: 330,
+              summary: "Routes a bounded question to the session that created the graph.",
+              evidence: "Question answers are rechecked against the exact revision.",
+              code: "page action -> host.ask -> quick_review_answer -> page",
+            },
+          ],
+          edges: [
+            ["index-view", "card-view", "navigates"],
+            ["card-view", "action-client", "dispatches"],
+            ["action-client", "ask-flow", "asks"],
+            ["ask-flow", "card-view", "updates"],
+          ],
+        },
+        server: {
+          title: "Action server",
+          parent: "core",
+          nodes: [
+            {
+              id: "request",
+              kind: "input",
+              name: "HTTP action",
+              path: "POST /<token>/action",
+              status: "context",
+              x: 60,
+              y: 90,
+              summary: "A bounded action from the local review page.",
+              evidence: "Unexpected Host and Origin values are refused.",
+              code: "mark-viewed | ask | context | approve | ...",
+            },
+            {
+              id: "verify",
+              kind: "guard",
+              name: "Range verification",
+              path: "review.ts:verifyRange",
+              status: "impacted",
+              x: 365,
+              y: 90,
+              summary: "Resolves target, base, then target again around every action.",
+              evidence: "Prevents one moving ref from passing as a consistent snapshot.",
+              code: "target -> base -> target",
+            },
+            {
+              id: "dispatch",
+              kind: "state machine",
+              name: "Action dispatch",
+              path: "server.ts",
+              status: "changed",
+              x: 670,
+              y: 90,
+              summary: "Runs actions one at a time and refuses work after a terminal decision.",
+              evidence: "Actions are serialized by one in-process queue.",
+              code: "verify() -> action() -> persist()",
+            },
+            {
+              id: "completion",
+              kind: "commit boundary",
+              name: "completion.json",
+              path: "review.ts:finalize",
+              status: "changed",
+              x: 365,
+              y: 345,
+              summary: "Exclusive file creation makes a terminal decision durable.",
+              evidence: "Failure after this boundary cannot reopen the review.",
+              code: "writeFileSync(completionPath, body, { flag: \"wx\" })",
+            },
+          ],
+          edges: [
+            ["request", "verify", "must pass"],
+            ["verify", "dispatch", "permits"],
+            ["dispatch", "completion", "commits"],
+            ["completion", "dispatch", "closes", true],
+          ],
+        },
+      };
+
+      const state = {
+        view: "root",
+        selected: "core",
+        mode: "pr",
+        zoom: 1,
+        filter: "",
+      };
+
+      const graph = document.querySelector("[data-graph]");
+      const edges = document.querySelector("[data-edges]");
+      const tree = document.querySelector("[data-tree]");
+      const inspector = document.querySelector("[data-inspector]");
+      const breadcrumbs = document.querySelector("[data-breadcrumbs]");
+      const status = document.querySelector("[data-status]");
+      const nodeCount = document.querySelector("[data-node-count]");
+      const empty = document.querySelector("[data-empty]");
+
+      function currentView() {
+        return views[state.view];
+      }
+
+      function currentNode() {
+        return currentView().nodes.find((node) => node.id === state.selected) || currentView().nodes[0];
+      }
+
+      function graphPath() {
+        const result = [];
+        let id = state.view;
+        while (id) {
+          result.unshift({ id, title: views[id].title });
+          id = views[id].parent;
+        }
+        return result;
+      }
+
+      function nodeCenter(node) {
+        return { x: node.x + 87, y: node.y + 38 };
+      }
+
+      function renderGraph() {
+        graph.querySelectorAll(".graph-node").forEach((node) => node.remove());
+        edges.querySelectorAll(".edge").forEach((edge) => edge.remove());
+        const view = currentView();
+        const visible = view.nodes.filter((node) => {
+          const haystack = `${node.name} ${node.kind} ${node.path}`.toLowerCase();
+          return haystack.includes(state.filter);
+        });
+        const visibleIds = new Set(visible.map((node) => node.id));
+
+        for (const [fromId, toId, label, inferred] of view.edges) {
+          if (!visibleIds.has(fromId) || !visibleIds.has(toId)) continue;
+          const from = nodeCenter(view.nodes.find((node) => node.id === fromId));
+          const to = nodeCenter(view.nodes.find((node) => node.id === toId));
+          const dx = Math.max(55, Math.abs(to.x - from.x) * 0.45);
+          const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          path.setAttribute("class", `edge${inferred ? " inferred" : ""}`);
+          path.setAttribute("d", `M ${from.x} ${from.y} C ${from.x + dx} ${from.y}, ${to.x - dx} ${to.y}, ${to.x} ${to.y}`);
+          const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+          title.textContent = `${fromId} ${label} ${toId}${inferred ? " (inferred)" : ""}`;
+          path.append(title);
+          edges.append(path);
+        }
+
+        for (const node of visible) {
+          const element = document.createElement("article");
+          element.className = `graph-node ${node.status}${node.id === state.selected ? " selected" : ""}`;
+          element.style.left = `${node.x}px`;
+          element.style.top = `${node.y}px`;
+          element.tabIndex = 0;
+          element.dataset.node = node.id;
+          element.innerHTML = `
+            <div class="node-kind">${node.kind}</div>
+            <div class="node-name">${node.name}</div>
+            <div class="node-meta">
+              <span>${node.status}</span>
+              <span class="node-expand">${node.expandable ? "open graph >" : "inspect"}</span>
+            </div>`;
+          element.addEventListener("click", () => selectNode(node.id));
+          element.addEventListener("dblclick", () => openNode(node));
+          element.addEventListener("keydown", (event) => {
+            if (event.key === "Enter") openNode(node);
+          });
+          graph.append(element);
+        }
+
+        empty.style.display = visible.length ? "none" : "block";
+        nodeCount.textContent = `${visible.length} nodes / ${view.edges.length} edges`;
+        graph.style.setProperty("--zoom", state.zoom);
+      }
+
+      function renderTree() {
+        const rootNodes = views.root.nodes;
+        const childViews = new Map([
+          ["core", views.core.nodes],
+          ["page", views.page.nodes],
+        ]);
+        tree.replaceChildren();
+        const root = makeTreeRow({ id: "root", name: "quick-review", kind: "project", status: "context" }, "", true);
+        tree.append(root);
+        for (const node of rootNodes) {
+          tree.append(makeTreeRow(node, "child", Boolean(childViews.get(node.id))));
+          if (state.view === node.id && childViews.has(node.id)) {
+            for (const child of childViews.get(node.id)) tree.append(makeTreeRow(child, "grandchild", Boolean(child.expandable)));
+          }
+        }
+      }
+
+      function makeTreeRow(node, depth, expandable) {
+        const row = document.createElement("div");
+        const selected = node.id === state.selected || (node.id === "root" && state.view === "root" && !state.selected);
+        row.className = `tree-row ${depth}${selected ? " selected" : ""}`;
+        row.innerHTML = `
+          <span class="twisty">${expandable ? (state.view === node.id ? "v" : ">") : ""}</span>
+          <span class="tree-icon">${node.kind === "project" ? "#" : node.expandable ? "+" : "."}</span>
+          <span class="tree-label">${node.name}</span>
+          <span class="tree-badge ${node.status}"></span>`;
+        row.addEventListener("click", () => {
+          if (node.id === "root") navigate("root");
+          else {
+            const active = currentView().nodes.some((candidate) => candidate.id === node.id);
+            if (active) selectNode(node.id);
+            else if (views[node.id]) navigate(node.id);
+            else {
+              const owner = Object.entries(views).find(([, view]) => view.nodes.some((candidate) => candidate.id === node.id));
+              if (owner) {
+                state.view = owner[0];
+                state.selected = node.id;
+                renderAll();
+              }
+            }
+          }
+        });
+        row.addEventListener("dblclick", () => {
+          if (views[node.expandable]) navigate(node.expandable);
+          else if (views[node.id]) navigate(node.id);
+        });
+        return row;
+      }
+
+      function renderBreadcrumbs() {
+        breadcrumbs.replaceChildren();
+        for (const [index, item] of graphPath().entries()) {
+          const button = document.createElement("button");
+          button.className = `crumb${index === graphPath().length - 1 ? " current" : ""}`;
+          button.type = "button";
+          button.textContent = item.title;
+          button.addEventListener("click", () => navigate(item.id));
+          breadcrumbs.append(button);
+        }
+      }
+
+      function renderInspector() {
+        const node = currentNode();
+        if (!node) {
+          inspector.innerHTML = "<p>Select a graph node.</p>";
+          return;
+        }
+        const statusClass = node.status === "context" ? "" : `status-${node.status}`;
+        inspector.innerHTML = `
+          <div class="inspector-main">
+            <p class="inspector-kicker">${node.kind}</p>
+            <h2>${node.name}</h2>
+            <p class="path">${node.path}</p>
+            <p class="summary">${node.summary}</p>
+            <dl class="facts">
+              <dt>relation</dt><dd class="${statusClass}">${state.mode === "head" ? "architecture" : node.status}</dd>
+              <dt>confidence</dt><dd>confirmed</dd>
+              <dt>revision</dt><dd>4d48eeeceab3</dd>
+              <dt>children</dt><dd>${node.expandable ? views[node.expandable].nodes.length + " known" : "not indexed"}</dd>
+            </dl>
+            <div class="section-label">Evidence</div>
+            <div class="evidence">${node.evidence}<br /><code>${node.path}</code></div>
+          </div>
+          <div class="inspector-extra">
+            <div class="section-label">Decompiler view</div>
+            <pre class="code">${escapeHtml(node.code)}</pre>
+            <div class="actions">
+              <button class="action-button primary" type="button" data-open ${node.expandable ? "" : "disabled"}>Open graph</button>
+              <button class="action-button" type="button" data-ask>Ask agent</button>
+              <button class="action-button" type="button" data-impact>Trace impact</button>
+              <button class="action-button" type="button" data-source>Exact source</button>
+            </div>
+            <div class="ask-box" data-ask-box>
+              <textarea placeholder="Ask about this node or selected evidence..."></textarea>
+              <button class="action-button primary" type="button" data-send>Send simulated question</button>
+            </div>
+            <div class="answer" data-answer></div>
+          </div>`;
+
+        inspector.querySelector("[data-open]").addEventListener("click", () => openNode(node));
+        inspector.querySelector("[data-ask]").addEventListener("click", () => {
+          inspector.querySelector("[data-ask-box]").classList.toggle("open");
+        });
+        inspector.querySelector("[data-impact]").addEventListener("click", () => {
+          status.textContent = `Impact trace for ${node.name}: ${impactFor(node.id)}`;
+        });
+        inspector.querySelector("[data-source]").addEventListener("click", () => {
+          status.textContent = `Loaded exact source for ${node.path} at 4d48eeeceab3.`;
+        });
+        inspector.querySelector("[data-send]").addEventListener("click", () => {
+          const box = inspector.querySelector("[data-ask-box]");
+          const question = box.querySelector("textarea").value.trim() || `How does ${node.name} participate in this change?`;
+          const answer = inspector.querySelector("[data-answer]");
+          answer.textContent = `Simulated agent answer: ${node.name} is connected to the reviewed range through the evidence above. A real expansion would read only this node's files and return bounded child nodes. Question: ${question}`;
+          answer.classList.add("visible");
+          status.textContent = "Agent response attached to the selected node.";
+        });
+      }
+
+      function impactFor(id) {
+        const links = currentView().edges.filter((edge) => edge[0] === id || edge[1] === id);
+        return links.map((edge) => `${edge[0]} -> ${edge[1]}`).join(", ") || "no known edges";
+      }
+
+      function escapeHtml(value) {
+        return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+      }
+
+      function selectNode(id) {
+        state.selected = id;
+        renderGraph();
+        renderTree();
+        renderInspector();
+        status.textContent = `Selected ${currentNode().name}. Double-click or press Enter to descend.`;
+      }
+
+      function openNode(node) {
+        if (node.expandable && views[node.expandable]) navigate(node.expandable);
+        else status.textContent = `${node.name} is a leaf. Exact symbol extraction would happen on demand.`;
+      }
+
+      function navigate(viewId) {
+        state.view = viewId;
+        state.selected = views[viewId].nodes[0]?.id;
+        state.filter = "";
+        document.querySelector(".search").value = "";
+        renderAll();
+        status.textContent = `Opened ${views[viewId].title} as a nested graph.`;
+      }
+
+      function renderMode() {
+        document.body.className = `${state.mode}-mode`;
+        document.querySelectorAll("[data-mode]").forEach((button) => {
+          button.classList.toggle("active", button.dataset.mode === state.mode);
+        });
+        document.querySelector("[data-range]").innerHTML =
+          state.mode === "pr"
+            ? "<code>master</code> 4d48eee..HEAD - 6 files, +312 -44"
+            : "<code>HEAD</code> 4d48eeeceab3 - architecture snapshot";
+      }
+
+      function renderAll() {
+        renderMode();
+        renderGraph();
+        renderTree();
+        renderBreadcrumbs();
+        renderInspector();
+      }
+
+      document.querySelectorAll("[data-mode]").forEach((button) => {
+        button.addEventListener("click", () => {
+          state.mode = button.dataset.mode;
+          renderAll();
+          status.textContent = state.mode === "pr" ? "PR overlay enabled: changed and impacted nodes are marked." : "HEAD snapshot enabled: showing architecture without a change overlay.";
+        });
+      });
+
+      document.querySelector(".search").addEventListener("input", (event) => {
+        state.filter = event.target.value.trim().toLowerCase();
+        renderGraph();
+      });
+
+      document.querySelectorAll("[data-zoom]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const action = button.dataset.zoom;
+          if (action === "in") state.zoom = Math.min(1.35, state.zoom + 0.1);
+          if (action === "out") state.zoom = Math.max(0.65, state.zoom - 0.1);
+          if (action === "reset") state.zoom = 1;
+          renderGraph();
+          status.textContent = `Graph zoom: ${Math.round(state.zoom * 100)}%.`;
+        });
+      });
+
+      renderAll();
+    </script>
+  </body>
+</html>
