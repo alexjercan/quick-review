@@ -152,7 +152,13 @@ test("the Pi session enhances, responds to comments, and approves", async () => 
     for (let count = 0; count < 100; count++) {
       const state = (await (await fetch(new URL("state", review.url))).json())
         .data.state;
-      if (state.comments[0]?.delivery === "answered") break;
+      if (
+        state.comments[0]?.messages.some(
+          (message: { author: string; delivery?: string }) =>
+            message.author === "reviewer" && message.delivery === "answered",
+        )
+      )
+        break;
       await new Promise((resolve) => setTimeout(resolve, 5));
     }
 
@@ -211,7 +217,7 @@ test("neutral review asks the current agent for triage without edits", async () 
       version: number;
       outcome: string;
     };
-    assert.equal(event.version, 2);
+    assert.equal(event.version, 3);
     assert.equal(event.outcome, "commented");
     const outcome = base.pi.sent.find(
       (item) => item.customType === "quick-review-graph-outcome",
@@ -283,11 +289,11 @@ test("plain assistant text can respond to the active comment", async () => {
     for (let count = 0; count < 100; count++) {
       const state = (await (await fetch(new URL("state", review.url))).json())
         .data.state;
-      if (state.comments[0]?.delivery === "answered") {
-        assert.equal(
-          state.comments[0].response,
-          "The exact code supplies the behavior.",
-        );
+      const response = state.comments[0]?.messages.find(
+        (message: { author: string }) => message.author === "agent",
+      );
+      if (response) {
+        assert.equal(response.body, "The exact code supplies the behavior.");
         break;
       }
       await new Promise((resolve) => setTimeout(resolve, 5));

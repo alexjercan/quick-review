@@ -155,11 +155,19 @@ await act({
   comment: "Does the caller supply a name?",
 });
 for (let count = 0; count < 100; count++) {
-  if (review.state.comments[0]?.delivery === "answered") break;
+  if (
+    review.state.comments[0]?.messages.some(
+      (message) =>
+        message.author === "reviewer" && message.delivery === "answered",
+    )
+  )
+    break;
   await new Promise((resolve) => setTimeout(resolve, 5));
 }
 assert.equal(
-  review.state.comments[0]?.response,
+  review.state.comments[0]?.messages.find(
+    (message) => message.author === "agent",
+  )?.body,
   "The caller must pass a name.",
 );
 const code = await act({ action: "code", node: "greeting.format" });
@@ -177,7 +185,7 @@ await review.server.close();
 
 assert.equal(completions.length, 1);
 const event = completions[0];
-assert.equal(event.version, 2);
+assert.equal(event.version, 3);
 assert.equal(event.outcome, "commented");
 assert.equal(event.scope, "diff");
 assert.equal(event.comments.length, 2);

@@ -19,8 +19,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   questions, comments, minimap navigation, pan, zoom, and draggable graph nodes.
 - Add independently versioned graph artifacts, atomic expansion deltas, graph
   state, and graph completion events for Pi and Claude Code.
-- Add exact-line review comments, nonblocking single-agent comment delivery, and
-  a neutral `commented` completion with agent triage and suggested next steps.
+- Add exact-line review comment threads, nonblocking single-agent delivery,
+  agent and reviewer replies, draft editing, and a neutral `commented`
+  completion with agent triage and suggested next steps.
 
 ### Changed
 

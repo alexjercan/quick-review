@@ -2,7 +2,7 @@
 
 The project graph artifact, graph state, and graph completion event have
 independent version numbers. Artifact and delta are version `1`; state and
-completion are version `2`. Consumers refuse unknown versions.
+completion are version `3`. Consumers refuse unknown versions.
 
 ## Inputs
 
@@ -114,13 +114,13 @@ direct child of the requested expandable parent. IDs cannot be reused. A parent
 can be expanded once. Aggregate graph and depth limits still apply. Delta
 application and state persistence are atomic.
 
-## Graph state version 2
+## Graph state version 3
 
 `graph-state.json` is bound to the root identity and exact revisions:
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "identity": "<sha256>",
   "revision": "<40 hex>",
   "baseRevision": "<40 hex>",
@@ -133,17 +133,24 @@ application and state persistence are atomic.
       "nodeId": "node-id",
       "file": "path.ts",
       "lines": "1-10",
-      "body": "...",
-      "delivery": "draft | queued | active | answered | failed | superseded",
-      "response": "..."
+      "messages": [
+        {
+          "id": "<24 hex>",
+          "author": "reviewer",
+          "body": "...",
+          "delivery": "draft | queued | active | answered | failed | superseded"
+        },
+        { "id": "<24 hex>", "author": "agent", "body": "..." }
+      ]
     }
   ],
   "outcome": "open | approved | changes-requested | commented"
 }
 ```
 
-State is capped at 512 KiB, 100 retained version 1 questions, 160 comments, 4
-KiB per comment, and 16 KiB per agent response. The `viewed` and `questions`
+State is capped at 512 KiB, 100 retained version 1 questions, 160 comment
+threads, 320 total messages, 4 KiB per reviewer message, and 16 KiB per agent
+message. The `viewed` and `questions`
 fields remain for compatibility, but they are not approval gates or page
 controls. Transient pan, zoom, tab, code
 projection, composer, and node positions stay in the browser.
@@ -158,9 +165,11 @@ Responses use `no-store`, `nosniff`, `no-referrer`, and a CSP that permits only
 same-origin style, script, and connect. Host must be the listening loopback
 address. Origin, when present, must equal that request's exact origin.
 
-Page actions are `enhance`, `add-comment`, `send-comment`, `code`, `send-review`,
-`approve`, and `request-changes`. Comments can use a node anchor or an exact line
-inside that node. Saving is immediate. Sending enters one FIFO current-session
+Page actions are `enhance`, `add-comment`, `send-comment`, `reply-comment`,
+`send-reply`, `edit-comment`, `queue-comment`, `code`, `send-review`, `approve`,
+and `request-changes`. Comments can use a node anchor or an exact line inside
+that node. Saving and replying are immediate. Only the latest draft in a thread
+can be edited. Sending a draft or a new message enters one FIFO current-session
 agent queue and returns without waiting. Requests are capped at 16 KiB and run
 one at a time. Every action verifies the exact scope first. Agent-backed and
 terminal actions verify again before mutation or commit. Closing aborts
@@ -172,7 +181,7 @@ open. A terminal action is never replaceable. After any terminal action, the
 page counts down for three seconds, attempts to close its tab, and shows a
 manual-close fallback when browser policy refuses.
 
-## Graph completion version 2
+## Graph completion version 3
 
 The exclusive creation of `completion.json` is the terminal commit boundary.
 Before it, failure leaves the graph open. After it, delivery or cleanup failure

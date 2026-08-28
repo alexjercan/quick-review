@@ -7,6 +7,7 @@ import type {
   GraphCompletionEvent,
   GraphDelta,
   GraphNode,
+  ReviewerCommentMessage,
 } from "./graph-contract.ts";
 import type { GraphHost } from "./graph-review.ts";
 
@@ -16,6 +17,7 @@ export type GraphHostEvent =
       requestId: string;
       node: GraphNode;
       comment: GraphComment;
+      message: ReviewerCommentMessage;
     }
   | {
       kind: "expansion";
@@ -81,13 +83,14 @@ export function createGraphQueueHost(
       push(event);
     });
   return {
-    comment: ({ node, comment, signal }) => {
-      const requestId = identify();
+    comment: ({ node, comment, message, signal }) => {
+      const requestId = message.id;
       const result = pending(comments, requestId, {
         kind: "comment",
         requestId,
         node,
-        comment,
+        comment: structuredClone(comment),
+        message: structuredClone(message),
       });
       const abort = () => {
         const request = comments.get(requestId);

@@ -79,9 +79,12 @@
 - Add neutral `commented` completion. It supersedes active and queued individual
   sends, ends the review immediately, and asks the current session agent to
   triage comments and suggest next steps without editing.
-- Version graph state and completion as version 2 because comment delivery,
-  responses, and the terminal outcome change their formats. Keep artifact and
-  delta at version 1.
+- Version graph state and completion as version 3 because comments are ordered
+  reviewer-agent message threads. Keep artifact and delta at version 1.
+- A thread keeps one node or exact-line anchor. Only its latest draft reviewer
+  message can be edited. Once sent, a message freezes; `Reply` appends a new
+  draft to the last message in the chain. Agent responses are inserted directly
+  after the reviewer message they answer.
 - After neutral feedback, approval, change request, or external close, count
   down three seconds and attempt to close the browser tab with a visible
   fallback.

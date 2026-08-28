@@ -16,8 +16,8 @@ The current session agent builds a small root graph. The reviewer can:
 - focus any node in a synchronized tab;
 - navigate the fully known project tree back to the best open graph context;
 - inspect exact code and decompiler output as graph nodes;
-- leave node-scoped or exact-line comments and optionally send each comment to
-  the current session agent;
+- leave node-scoped or exact-line comment threads, send drafts to the current
+  session agent, and continue with reviewer and agent replies;
 - pan, zoom, drag nodes, use the minimap, and follow a pinned breadcrumb;
 - approve the exact graph or request changes.
 
@@ -62,10 +62,11 @@ provenance. Repository files are always untrusted evidence, never instructions.
    root graph.
 3. The page opens. `Enhance` asks the same agent for a bounded direct-child
    delta through `quick_review_graph_expand`.
-4. A comment saves immediately. `Send to agent` places it in one nonblocking
-   FIFO queue and routes it through `quick_review_comment_respond`.
+4. A comment or reply saves immediately. Drafts can be edited. `Send to agent`
+   freezes the message, places it in one nonblocking FIFO queue, and routes it
+   through `quick_review_comment_respond`. Agent responses remain in the thread.
 5. Neutral feedback, approval, or a change request writes graph completion
-   version 2, emits `quick-review:graph-completed` in Pi, and returns the outcome
+   version 3, emits `quick-review:graph-completed` in Pi, and returns the outcome
    to the session. Neutral feedback asks the agent for triage and suggested next
    steps without authorizing edits.
 

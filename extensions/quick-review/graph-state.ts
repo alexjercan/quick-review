@@ -16,7 +16,9 @@ import {
   mergeGraph,
   parseGraphDelta,
   type GraphComment,
+  type GraphCommentDelivery,
   type GraphDelta,
+  type ReviewerCommentMessage,
   type GraphState,
   type ProjectGraph,
 } from "./graph-contract.ts";
@@ -108,37 +110,68 @@ export function validateGraphState(
     )
   )
     throw new Error("graph questions are invalid");
+  const messages = state.comments.flatMap((item) => item?.messages ?? []);
   if (
     state.comments.length > GRAPH_LIMITS.nodes ||
+    messages.length > GRAPH_LIMITS.commentMessages ||
     new Set(state.comments.map((item) => item?.id)).size !==
       state.comments.length ||
+    new Set(messages.map((item) => item?.id)).size !== messages.length ||
     state.comments.some(
       (item) =>
-        !exactKeys(item, [
-          "id",
-          "nodeId",
-          "file",
-          "lines",
-          "body",
-          "delivery",
-          "response",
-        ]) ||
+        !exactKeys(item, ["id", "nodeId", "file", "lines", "messages"]) ||
         !RECORD_ID.test(item.id) ||
         !ids.includes(item.nodeId) ||
         typeof item.file !== "string" ||
         typeof item.lines !== "string" ||
         !LINE_RANGE.test(item.lines) ||
-        !validText(item.body, LIMITS.comment) ||
-        ![
-          "draft",
-          "queued",
-          "active",
-          "answered",
-          "failed",
-          "superseded",
-        ].includes(item.delivery) ||
-        typeof item.response !== "string" ||
-        Buffer.byteLength(item.response, "utf8") > LIMITS.answer,
+        !Array.isArray(item.messages) ||
+        item.messages.length < 1 ||
+        item.messages[0]?.author !== "reviewer" ||
+        item.messages.some((message, index) => {
+          const previous = item.messages[index - 1];
+          const next = item.messages[index + 1];
+          if (
+            message.author === "agent" &&
+            (previous?.author !== "reviewer" ||
+              previous.delivery !== "answered")
+          )
+            return true;
+          if (
+            message.author === "reviewer" &&
+            message.delivery === "answered" &&
+            next?.author !== "agent"
+          )
+            return true;
+          return (
+            message.author === "reviewer" &&
+            message.delivery === "draft" &&
+            index !== item.messages.length - 1
+          );
+        }) ||
+        item.messages.some((message) => {
+          if (!message || typeof message !== "object") return true;
+          if (message.author === "agent")
+            return (
+              !exactKeys(message, ["id", "author", "body"]) ||
+              !RECORD_ID.test(message.id) ||
+              !validText(message.body, LIMITS.answer)
+            );
+          return (
+            message.author !== "reviewer" ||
+            !exactKeys(message, ["id", "author", "body", "delivery"]) ||
+            !RECORD_ID.test(message.id) ||
+            !validText(message.body, LIMITS.comment) ||
+            ![
+              "draft",
+              "queued",
+              "active",
+              "answered",
+              "failed",
+              "superseded",
+            ].includes(message.delivery)
+          );
+        }),
     )
   )
     throw new Error("graph comments are invalid");
@@ -199,17 +232,91 @@ export function addGraphComment(
     if (value < Number(startText) || value > Number(endText ?? startText))
       throw new Error("comment line is outside the graph node");
   }
+  if (
+    state.comments.flatMap((item) => item.messages).length >=
+    GRAPH_LIMITS.commentMessages
+  )
+    throw new Error("graph comment messages exceed the review limit");
+  const message: ReviewerCommentMessage = {
+    id: randomBytes(12).toString("hex"),
+    author: "reviewer",
+    body: bounded(body.trim(), LIMITS.comment),
+    delivery: options.delivery ?? "draft",
+  };
   const comment: GraphComment = {
     id: randomBytes(12).toString("hex"),
     nodeId,
     file: node.file ?? evidence?.file ?? "",
     lines: line ?? location,
-    body: bounded(body.trim(), LIMITS.comment),
-    delivery: options.delivery ?? "draft",
-    response: "",
+    messages: [message],
   };
   state.comments.push(comment);
   return comment;
+}
+
+function commentThread(state: GraphState, threadId: string): GraphComment {
+  const thread = state.comments.find((item) => item.id === threadId);
+  if (!thread) throw new Error("unknown graph comment thread");
+  return thread;
+}
+
+export function replyGraphComment(
+  state: GraphState,
+  threadId: string,
+  body: string,
+  delivery: "draft" | "queued" = "draft",
+): ReviewerCommentMessage {
+  if (!body.trim()) throw new Error("a reply needs text");
+  if (
+    state.comments.flatMap((item) => item.messages).length >=
+    GRAPH_LIMITS.commentMessages
+  )
+    throw new Error("graph comment messages exceed the review limit");
+  const thread = commentThread(state, threadId);
+  const last = thread.messages.at(-1);
+  if (last?.author === "reviewer" && last.delivery === "draft")
+    throw new Error("edit the latest draft instead of replying");
+  const message: ReviewerCommentMessage = {
+    id: randomBytes(12).toString("hex"),
+    author: "reviewer",
+    body: bounded(body.trim(), LIMITS.comment),
+    delivery,
+  };
+  thread.messages.push(message);
+  return message;
+}
+
+export function editGraphComment(
+  state: GraphState,
+  threadId: string,
+  messageId: string,
+  body: string,
+): ReviewerCommentMessage {
+  if (!body.trim()) throw new Error("a comment needs text");
+  const thread = commentThread(state, threadId);
+  const message = thread.messages.at(-1);
+  if (
+    !message ||
+    message.id !== messageId ||
+    message.author !== "reviewer" ||
+    message.delivery !== "draft"
+  )
+    throw new Error("only the latest draft can be edited");
+  message.body = bounded(body.trim(), LIMITS.comment);
+  return message;
+}
+
+export function queueGraphComment(
+  state: GraphState,
+  threadId: string,
+  messageId: string,
+): ReviewerCommentMessage {
+  const thread = commentThread(state, threadId);
+  const message = thread.messages.find((item) => item.id === messageId);
+  if (!message || message.author !== "reviewer" || message.delivery !== "draft")
+    throw new Error("only a draft can be sent to the agent");
+  message.delivery = "queued";
+  return message;
 }
 
 export function recordGraphQuestion(

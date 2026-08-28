@@ -33,9 +33,11 @@
   direct-parent branch connector at each nested depth.
 - Chromium verified node and exact-line comment composers, passive save,
   Ctrl+Enter nonblocking agent delivery, queued/active/answered rendering,
-  response display, neutral Send review, and the three-second close countdown.
+  response display, reviewer replies, passive draft replies, latest-draft
+  editing, re-queueing a draft, a second agent response in the same thread,
+  neutral Send review, and the three-second close countdown.
 - Focused server and adapter tests verify FIFO single-agent delivery, exact line
-  bounds, superseding active and queued comments, neutral version 2 completion,
+  bounds, superseding active and queued comments, neutral version 3 completion,
   and current-session triage instructions.
 - The top-center target was 18.08 pixels below the viewport top and 0.10 pixels
   from its horizontal center in a 1600x1000 Chromium viewport.

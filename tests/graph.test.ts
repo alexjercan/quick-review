@@ -183,6 +183,8 @@ test("graph page keeps hostile graph text inside encoded data", () => {
   assert.match(GRAPH_PAGE_JS, /code-node/);
   assert.match(GRAPH_PAGE_JS, /data-code-line/);
   assert.match(GRAPH_PAGE_JS, /Send to agent/);
+  assert.match(GRAPH_PAGE_JS, /data-thread-action=\"reply\"/);
+  assert.match(GRAPH_PAGE_JS, /data-thread-action=\"edit\"/);
   assert.match(GRAPH_PAGE_JS, /function closeSoon/);
   assert.match(GRAPH_PAGE_JS, /e\.target\.closest\('\.node,button/);
   assert.match(GRAPH_PAGE_JS, /WORLD=100000/);
@@ -236,7 +238,7 @@ test("neutral review supersedes active and queued comments", async () => {
     verify: async () => {},
     persist: () => {},
     expand: async () => parseGraphDelta(delta(revision), revision),
-    comment: async (_node, _comment, signal) =>
+    comment: async (_node, _comment, _message, signal) =>
       await new Promise<string>((_resolve, reject) =>
         signal.addEventListener(
           "abort",
@@ -274,14 +276,26 @@ test("neutral review supersedes active and queued comments", async () => {
       comment: "Second",
     });
     for (let count = 0; count < 20; count++) {
-      if (state.comments.some((item) => item.delivery === "active")) break;
+      if (
+        state.comments.some((item) =>
+          item.messages.some(
+            (message) =>
+              message.author === "reviewer" && message.delivery === "active",
+          ),
+        )
+      )
+        break;
       await new Promise((resolve) => setTimeout(resolve, 5));
     }
     const result = await act({ action: "send-review" });
     assert.equal(result.status, 200);
     assert.equal(completed, true);
     assert.deepEqual(
-      state.comments.map((item) => item.delivery),
+      state.comments.flatMap((item) =>
+        item.messages
+          .filter((message) => message.author === "reviewer")
+          .map((message) => message.delivery),
+      ),
       ["superseded", "superseded"],
     );
   } finally {
@@ -344,10 +358,68 @@ test("graph server queues anchored comments and sends neutral review", async () 
     assert.equal(queued.status, 200);
     assert.equal(queued.payload.data.state.comments[0].lines, "2");
     for (let count = 0; count < 20; count++) {
-      if (state.comments[0]?.delivery === "answered") break;
+      if (
+        state.comments[0]?.messages.some(
+          (message) =>
+            message.author === "reviewer" && message.delivery === "answered",
+        )
+      )
+        break;
       await new Promise((resolve) => setTimeout(resolve, 5));
     }
-    assert.equal(state.comments[0]?.response, "The caller supplies the name.");
+    assert.equal(
+      state.comments[0]?.messages.find((message) => message.author === "agent")
+        ?.body,
+      "The caller supplies the name.",
+    );
+    const thread = state.comments[0]!;
+    await act({
+      action: "reply-comment",
+      node: "greeting.format",
+      thread: thread.id,
+      comment: "Follow up",
+    });
+    const draft = thread.messages.at(-1)!;
+    assert.equal(draft.author, "reviewer");
+    assert.equal(draft.delivery, "draft");
+    await act({
+      action: "edit-comment",
+      node: "greeting.format",
+      thread: thread.id,
+      message: draft.id,
+      comment: "Edited follow up",
+    });
+    assert.equal(thread.messages.at(-1)?.body, "Edited follow up");
+    await act({
+      action: "queue-comment",
+      node: "greeting.format",
+      thread: thread.id,
+      message: draft.id,
+    });
+    assert.equal(
+      (
+        await act({
+          action: "edit-comment",
+          node: "greeting.format",
+          thread: thread.id,
+          message: draft.id,
+          comment: "Too late",
+        })
+      ).status,
+      400,
+    );
+    for (let count = 0; count < 20; count++) {
+      if (
+        thread.messages.filter((message) => message.author === "agent")
+          .length === 2
+      )
+        break;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assert.deepEqual(
+      thread.messages.map((message) => message.author),
+      ["reviewer", "agent", "reviewer", "agent"],
+    );
     const result = await act({ action: "send-review" });
     assert.equal(result.status, 200);
     assert.equal(commented, true);

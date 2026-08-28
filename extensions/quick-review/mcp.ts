@@ -390,6 +390,7 @@ export function createQuickReviewMcp(options: McpOptions = {}): QuickReviewMcp {
       return text(
         buildGraphCommentPrompt({
           comment: event.comment,
+          message: event.message,
           node: event.node,
           revision: review.plan.inputs.revision,
         }),

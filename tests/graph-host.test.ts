@@ -5,6 +5,7 @@ import type {
   GraphComment,
   GraphDelta,
   GraphNode,
+  ReviewerCommentMessage,
 } from "../extensions/quick-review/graph-contract.ts";
 
 const node: GraphNode = {
@@ -56,13 +57,19 @@ test("graph host queues enhancement and comment responses", async () => {
     nodeId: "core",
     file: "src/core.ts",
     lines: "3",
-    body: "Why?",
-    delivery: "active",
-    response: "",
+    messages: [
+      {
+        id: "c".repeat(24),
+        author: "reviewer",
+        body: "Why?",
+        delivery: "active",
+      },
+    ],
   };
   const responding = host.comment({
     node,
     comment,
+    message: comment.messages[0] as ReviewerCommentMessage,
     signal: new AbortController().signal,
   });
   const event = await host.next();
@@ -86,13 +93,19 @@ test("a cancelled graph wait leaves its event queued", async () => {
     nodeId: "core",
     file: "src/core.ts",
     lines: "3",
-    body: "Still there?",
-    delivery: "active",
-    response: "",
+    messages: [
+      {
+        id: "c".repeat(24),
+        author: "reviewer",
+        body: "Still there?",
+        delivery: "active",
+      },
+    ],
   };
   const responding = host.comment({
     node,
     comment,
+    message: comment.messages[0] as ReviewerCommentMessage,
     signal: new AbortController().signal,
   });
   assert.equal(await host.next({ signal: controller.signal }), undefined);

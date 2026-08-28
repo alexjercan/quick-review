@@ -20,6 +20,7 @@ import {
   type GraphDelta,
   type GraphNode,
   type GuidanceSource,
+  type ReviewerCommentMessage,
 } from "./graph-contract.ts";
 import {
   buildExpansionPrompt,
@@ -156,11 +157,12 @@ export default function quickReview(pi: ExtensionAPI): void {
   const comment = (request: {
     node: GraphNode;
     comment: GraphComment;
+    message: ReviewerCommentMessage;
     signal: AbortSignal;
   }): Promise<string> => {
     const review = active;
     if (!review) throw new Error("no project graph is open");
-    const id = request.comment.id;
+    const id = request.message.id;
     return new Promise<string>((resolve, reject) => {
       if (request.signal.aborted) {
         reject(new Error("the comment was superseded"));

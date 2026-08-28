@@ -4,8 +4,8 @@ import { createHash } from "node:crypto";
 import { LINE_RANGE, SAFE_PATH, SHA } from "./contract.ts";
 
 export const GRAPH_ARTIFACT_VERSION = 1;
-export const GRAPH_STATE_VERSION = 2;
-export const GRAPH_COMPLETION_VERSION = 2;
+export const GRAPH_STATE_VERSION = 3;
+export const GRAPH_COMPLETION_VERSION = 3;
 
 export const GRAPH_LIMITS = {
   artifact: 256 * 1024,
@@ -21,6 +21,7 @@ export const GRAPH_LIMITS = {
   code: 16 * 1024,
   inventory: 128 * 1024,
   inventoryFiles: 600,
+  commentMessages: 320,
   title: 160,
   summary: 4096,
 } as const;
@@ -139,14 +140,27 @@ export type GraphCommentDelivery =
   | "failed"
   | "superseded";
 
+export interface ReviewerCommentMessage {
+  id: string;
+  author: "reviewer";
+  body: string;
+  delivery: GraphCommentDelivery;
+}
+
+export interface AgentCommentMessage {
+  id: string;
+  author: "agent";
+  body: string;
+}
+
+export type GraphCommentMessage = ReviewerCommentMessage | AgentCommentMessage;
+
 export interface GraphComment {
   id: string;
   nodeId: string;
   file: string;
   lines: string;
-  body: string;
-  delivery: GraphCommentDelivery;
-  response: string;
+  messages: GraphCommentMessage[];
 }
 
 export interface GraphState {

@@ -265,6 +265,17 @@ test("a cancelled wait leaves the graph comment queued", async () => {
       commentId: commentId[1],
       response: "Yes.",
     });
+    for (let count = 0; count < 100; count++) {
+      const state = (await (await fetch(new URL("state", review.url))).json())
+        .data.state;
+      if (
+        state.comments[0]?.messages.some(
+          (message: { author: string }) => message.author === "agent",
+        )
+      )
+        break;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
   } finally {
     await session.cleanup();
   }

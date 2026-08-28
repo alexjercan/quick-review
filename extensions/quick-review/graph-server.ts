@@ -6,10 +6,12 @@ import type { AddressInfo, Socket } from "node:net";
 import { bounded, isCommitted, LIMITS } from "./contract.ts";
 import type {
   GraphComment,
+  GraphCommentDelivery,
   GraphDelta,
   GraphNode,
   GraphState,
   ProjectGraph,
+  ReviewerCommentMessage,
 } from "./graph-contract.ts";
 import { mergeGraph } from "./graph-contract.ts";
 import {
@@ -21,7 +23,10 @@ import {
 import {
   addGraphComment,
   applyGraphDelta,
+  editGraphComment,
   graphApprovable,
+  queueGraphComment,
+  replyGraphComment,
   setGraphViewed,
 } from "./graph-state.ts";
 
@@ -32,6 +37,7 @@ export interface GraphActions {
   comment(
     node: GraphNode,
     comment: GraphComment,
+    message: ReviewerCommentMessage,
     signal: AbortSignal,
   ): Promise<string>;
   code(node: GraphNode, signal: AbortSignal): Promise<string>;
@@ -55,10 +61,16 @@ interface ActionRequest {
   node?: string;
   comment?: string;
   line?: string;
+  thread?: string;
+  message?: string;
 }
 const NODE_ACTIONS = [
   "enhance",
   "send-comment",
+  "reply-comment",
+  "send-reply",
+  "queue-comment",
+  "edit-comment",
   "code",
   "mark-viewed",
   "reopen-node",
@@ -81,11 +93,16 @@ function parseAction(source: string): ActionRequest {
   if (
     typeof request.action !== "string" ||
     Object.keys(request).some(
-      (key) => !["action", "node", "comment", "line"].includes(key),
+      (key) =>
+        !["action", "node", "comment", "line", "thread", "message"].includes(
+          key,
+        ),
     ) ||
     (request.node !== undefined && typeof request.node !== "string") ||
     (request.comment !== undefined && typeof request.comment !== "string") ||
-    (request.line !== undefined && typeof request.line !== "string")
+    (request.line !== undefined && typeof request.line !== "string") ||
+    (request.thread !== undefined && typeof request.thread !== "string") ||
+    (request.message !== undefined && typeof request.message !== "string")
   )
     throw new Error("action request is invalid");
   return request as unknown as ActionRequest;
@@ -128,7 +145,7 @@ export async function startGraphServer(
     queue = result;
     return result;
   };
-  const commentQueue: string[] = [];
+  const commentQueue: Array<{ threadId: string; messageId: string }> = [];
   let commentWorker = false;
   let activeComment: AbortController | undefined;
   let terminal = false;
@@ -140,25 +157,34 @@ export async function startGraphServer(
     if (closing) throw new Error("the review is closing");
   };
   const data = () => graphPageData(graph, state);
+  const reviewerMessages = () =>
+    state.comments.flatMap((thread) =>
+      thread.messages
+        .filter((message) => message.author === "reviewer")
+        .map((message) => ({ thread, message })),
+    );
   const supersedeComments = () => {
-    const previous = state.comments.map(
-      (item) => [item.id, item.delivery] as const,
+    const previous = reviewerMessages().map(
+      ({ message }) => [message.id, message.delivery] as const,
     );
     activeComment?.abort();
     commentQueue.length = 0;
-    for (const item of state.comments)
-      if (item.delivery === "queued" || item.delivery === "active")
-        item.delivery = "superseded";
+    for (const { message } of reviewerMessages())
+      if (message.delivery === "queued" || message.delivery === "active")
+        message.delivery = "superseded";
     return previous;
   };
   const restoreComments = (
-    previous: ReadonlyArray<readonly [string, GraphComment["delivery"]]>,
+    previous: ReadonlyArray<readonly [string, GraphCommentDelivery]>,
   ) => {
     for (const [id, delivery] of previous) {
-      const item = state.comments.find((comment) => comment.id === id);
-      if (!item || (delivery !== "queued" && delivery !== "active")) continue;
-      item.delivery = "queued";
-      commentQueue.push(id);
+      const found = reviewerMessages().find(({ message }) => message.id === id);
+      if (!found || (delivery !== "queued" && delivery !== "active")) continue;
+      found.message.delivery = "queued";
+      commentQueue.push({
+        threadId: found.thread.id,
+        messageId: found.message.id,
+      });
     }
     void pumpComments();
   };
@@ -168,54 +194,69 @@ export async function startGraphServer(
     try {
       while (!terminal) {
         const current = await serialize(async () => {
-          const id = commentQueue.shift();
-          const comment = state.comments.find((item) => item.id === id);
-          if (!comment || comment.delivery !== "queued") return undefined;
+          const queued = commentQueue.shift();
+          const thread = state.comments.find(
+            (item) => item.id === queued?.threadId,
+          );
+          const message = thread?.messages.find(
+            (item) => item.id === queued?.messageId,
+          );
+          if (
+            !thread ||
+            !message ||
+            message.author !== "reviewer" ||
+            message.delivery !== "queued"
+          )
+            return undefined;
           try {
             await actions.verify(closer.signal);
-          } catch (error) {
-            comment.delivery = "failed";
-            comment.response = bounded(
-              error instanceof Error ? error.message : String(error),
-              LIMITS.answer,
-            );
+          } catch {
+            message.delivery = "failed";
             actions.persist(state);
             return undefined;
           }
-          comment.delivery = "active";
+          message.delivery = "active";
           actions.persist(state);
-          return comment;
+          return { thread, message };
         });
         if (!current) return;
         const merged = mergeGraph(graph, state.deltas);
-        const node = merged.nodes.find((item) => item.id === current.nodeId);
+        const node = merged.nodes.find(
+          (item) => item.id === current.thread.nodeId,
+        );
         if (!node) continue;
         const controller = new AbortController();
         activeComment = controller;
         try {
           const response = await actions.comment(
             node,
-            current,
+            current.thread,
+            current.message,
             controller.signal,
           );
           await serialize(async () => {
-            if (terminal || current.delivery !== "active") return;
+            if (terminal || current.message.delivery !== "active") return;
             await actions.verify(closer.signal);
-            current.response = bounded(response.trim(), LIMITS.answer);
-            current.delivery = current.response ? "answered" : "failed";
+            const body = bounded(response.trim(), LIMITS.answer);
+            current.message.delivery = body ? "answered" : "failed";
+            if (body) {
+              const index = current.thread.messages.findIndex(
+                (item) => item.id === current.message.id,
+              );
+              current.thread.messages.splice(index + 1, 0, {
+                id: randomBytes(12).toString("hex"),
+                author: "agent",
+                body,
+              });
+            }
             actions.persist(state);
           });
-        } catch (error) {
+        } catch {
           await serialize(() => {
-            if (terminal || current.delivery !== "active") return;
-            current.delivery = controller.signal.aborted
+            if (terminal || current.message.delivery !== "active") return;
+            current.message.delivery = controller.signal.aborted
               ? "superseded"
               : "failed";
-            current.response = controller.signal.aborted
-              ? ""
-              : error instanceof Error
-                ? bounded(error.message, LIMITS.answer)
-                : "The session agent could not answer.";
             actions.persist(state);
           });
         } finally {
@@ -267,6 +308,7 @@ export async function startGraphServer(
         line: request.line,
         delivery: queued ? "queued" : "draft",
       });
+      const message = added.messages[0] as ReviewerCommentMessage;
       try {
         actions.persist(state);
       } catch (error) {
@@ -274,7 +316,7 @@ export async function startGraphServer(
         throw error;
       }
       if (queued) {
-        commentQueue.push(added.id);
+        commentQueue.push({ threadId: added.id, messageId: message.id });
         void pumpComments();
       }
       return {
@@ -282,6 +324,74 @@ export async function startGraphServer(
           ? "Comment queued for the session agent."
           : "Review comment recorded.",
       };
+    }
+    if (request.action === "reply-comment" || request.action === "send-reply") {
+      const threadId = request.thread ?? "";
+      const thread = state.comments.find((item) => item.id === threadId);
+      if (!thread || thread.nodeId !== node!.id)
+        throw new Error("unknown graph comment thread");
+      const queued = request.action === "send-reply";
+      const message = replyGraphComment(
+        state,
+        threadId,
+        comment,
+        queued ? "queued" : "draft",
+      );
+      try {
+        actions.persist(state);
+      } catch (error) {
+        thread.messages = thread.messages.filter(
+          (item) => item.id !== message.id,
+        );
+        throw error;
+      }
+      if (queued) {
+        commentQueue.push({ threadId, messageId: message.id });
+        void pumpComments();
+      }
+      return {
+        message: queued
+          ? "Reply queued for the session agent."
+          : "Draft reply recorded.",
+      };
+    }
+    if (request.action === "edit-comment") {
+      const thread = state.comments.find((item) => item.id === request.thread);
+      if (!thread || thread.nodeId !== node!.id)
+        throw new Error("unknown graph comment thread");
+      const target = thread.messages.find(
+        (item) => item.id === request.message,
+      );
+      const oldBody = target?.body;
+      const edited = editGraphComment(
+        state,
+        request.thread ?? "",
+        request.message ?? "",
+        comment,
+      );
+      try {
+        actions.persist(state);
+      } catch (error) {
+        if (oldBody !== undefined) edited.body = oldBody;
+        throw error;
+      }
+      return { message: `Draft ${edited.id} updated.` };
+    }
+    if (request.action === "queue-comment") {
+      const threadId = request.thread ?? "";
+      const thread = state.comments.find((item) => item.id === threadId);
+      if (!thread || thread.nodeId !== node!.id)
+        throw new Error("unknown graph comment thread");
+      const queued = queueGraphComment(state, threadId, request.message ?? "");
+      try {
+        actions.persist(state);
+      } catch (error) {
+        queued.delivery = "draft";
+        throw error;
+      }
+      commentQueue.push({ threadId, messageId: queued.id });
+      void pumpComments();
+      return { message: "Draft queued for the session agent." };
     }
     if (request.action === "enhance") {
       if (!node!.expandable) throw new Error("this node cannot be enhanced");

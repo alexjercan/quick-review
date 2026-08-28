@@ -13,6 +13,7 @@ import {
   type GraphNode,
   type GraphState,
   type ProjectGraph,
+  type ReviewerCommentMessage,
 } from "./graph-contract.ts";
 import { mergeGraph } from "./graph-contract.ts";
 import { startGraphServer, type GraphServer } from "./graph-server.ts";
@@ -23,6 +24,7 @@ export interface GraphHost {
   comment(request: {
     node: GraphNode;
     comment: GraphComment;
+    message: ReviewerCommentMessage;
     signal: AbortSignal;
   }): Promise<string>;
   expand(request: { node: GraphNode; knownIds: string[] }): Promise<GraphDelta>;
@@ -188,8 +190,8 @@ export async function openGraphReview(
             (node) => node.id,
           ),
         }),
-      comment: (node, comment, signal) =>
-        host.comment({ node, comment, signal }),
+      comment: (node, comment, message, signal) =>
+        host.comment({ node, comment, message, signal }),
       code: (node, signal) => exactCode(plan, node, signal),
       approve: (comment) => finalize("approved", comment),
       requestChanges: (comment) => finalize("changes-requested", comment),
