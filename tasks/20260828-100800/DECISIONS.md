@@ -82,8 +82,12 @@
 - Keep every indexed node visible in Project structure. Dim nodes whose graph
   ancestors are still collapsed, and mark open tabs with `T`, the active tab
   with `[T]`, and Project canvas with `C` or `[C]`.
-- Snap tree-navigation targets to the viewport's top-left margin instead of
-  centering them. Large nodes then expose their title and controls first.
+- Snap tree-navigation targets 18 pixels below the viewport top and center them
+  horizontally. Large nodes expose their title and controls first without being
+  biased to one side.
+- Keep a hidden half-viewport gutter before the logical canvas. It gives nodes
+  near the world's left edge enough pannable room to center correctly. Pan,
+  wheel zoom, reset, and minimap coordinates subtract that gutter.
 - Use the fixed workspace header as a clickable context breadcrumb, for example
   `quick-review / Review core / Review lifecycle / planReview`. It remains
   visible while the graph pans and does not add another label inside the grid.

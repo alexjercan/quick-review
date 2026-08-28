@@ -514,7 +514,6 @@
         height: 1500px;
         transform: scale(var(--zoom, 1));
         transform-origin: 0 0;
-        transition: transform 100ms ease;
       }
 
       .edges {
@@ -1344,6 +1343,7 @@
         tabs: [],
         activeTab: "canvas",
         fullscreen: false,
+        gutterReady: false,
       };
 
       const canvas = document.querySelector("[data-canvas]");
@@ -1448,9 +1448,21 @@
         renderMode();
         renderOverlay();
         canvas.style.setProperty("--zoom", state.zoom);
+        canvas.style.marginLeft = `${canvasGutter()}px`;
+        if (!state.gutterReady) {
+          state.gutterReady = true;
+          requestAnimationFrame(() => {
+            viewport.scrollLeft = canvasGutter();
+            renderMinimapWindow();
+          });
+        }
         const visible = walk().filter(({ node }) => matchesFilter(node)).length;
         count.textContent = `${visible} visible nodes / ${walk().length} indexed`;
         renderMinimap();
+      }
+
+      function canvasGutter() {
+        return viewport.clientWidth / 2;
       }
 
       function rootProjection() {
@@ -1486,7 +1498,7 @@
       function renderMinimapWindow() {
         const windowRect = minimapSvg.querySelector(".minimap-window");
         if (!windowRect) return;
-        windowRect.setAttribute("x", String(viewport.scrollLeft / state.zoom));
+        windowRect.setAttribute("x", String((viewport.scrollLeft - canvasGutter()) / state.zoom));
         windowRect.setAttribute("y", String(viewport.scrollTop / state.zoom));
         windowRect.setAttribute("width", String(viewport.clientWidth / state.zoom));
         windowRect.setAttribute("height", String(viewport.clientHeight / state.zoom));
@@ -1500,8 +1512,10 @@
           right = Math.max(right, (override?.x ?? item.x) + size.width);
           bottom = Math.max(bottom, (override?.y ?? item.y) + size.height);
         }
-        const width = Math.max(2300, Math.ceil(right + 180));
-        const height = Math.max(1500, Math.ceil(bottom + 180));
+        const rightRoom = viewport.clientWidth / state.zoom + 50;
+        const bottomRoom = viewport.clientHeight / state.zoom + 50;
+        const width = Math.max(2300, Math.ceil(right + rightRoom));
+        const height = Math.max(1500, Math.ceil(bottom + bottomRoom));
         canvas.style.width = `${width}px`;
         canvas.style.height = `${height}px`;
         rootEdges.setAttribute("viewBox", `0 0 ${width} ${height}`);
@@ -1698,7 +1712,7 @@
         state.activeTab = id;
         state.selected = id;
         state.ask = null;
-        viewport.scrollTo({ left: 0, top: 0 });
+        viewport.scrollTo({ left: canvasGutter(), top: 0 });
         render();
         const node = findNode(id)?.node;
         status.textContent = node?.children?.length && node.expanded
@@ -1709,7 +1723,7 @@
       function activateTab(id) {
         state.activeTab = id;
         state.ask = null;
-        viewport.scrollTo({ left: 0, top: 0 });
+        viewport.scrollTo({ left: canvasGutter(), top: 0 });
         render();
       }
 
@@ -1951,17 +1965,22 @@
           if (contextId === id) centerCanvasOrigin();
           return;
         }
+        element.scrollIntoView({
+          block: "start",
+          inline: "center",
+          behavior: "auto",
+        });
         const nodeRect = element.getBoundingClientRect();
         const viewRect = viewport.getBoundingClientRect();
         viewport.scrollBy({
-          left: nodeRect.left - viewRect.left - 22,
-          top: nodeRect.top - viewRect.top - 18,
-          behavior: "smooth",
+          left: nodeRect.left + nodeRect.width / 2 - (viewRect.left + viewRect.width / 2),
+          top: -18,
+          behavior: "auto",
         });
       }
 
       function centerCanvasOrigin() {
-        viewport.scrollTo({ left: 0, top: 0, behavior: "smooth" });
+        viewport.scrollTo({ left: canvasGutter(), top: 0, behavior: "smooth" });
       }
 
       function renderMode() {
@@ -2004,7 +2023,7 @@
         reflow(findNode("core").node);
         reflowRoot();
         render();
-        viewport.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+        viewport.scrollTo({ top: 0, left: canvasGutter(), behavior: "smooth" });
         status.textContent = "Restored the initial progressive graph layout.";
       }
 
@@ -2075,11 +2094,11 @@
         const rect = viewport.getBoundingClientRect();
         const cursorX = event.clientX - rect.left;
         const cursorY = event.clientY - rect.top;
-        const worldX = (viewport.scrollLeft + cursorX) / oldZoom;
+        const worldX = (viewport.scrollLeft - canvasGutter() + cursorX) / oldZoom;
         const worldY = (viewport.scrollTop + cursorY) / oldZoom;
         state.zoom = nextZoom;
         canvas.style.setProperty("--zoom", state.zoom);
-        viewport.scrollLeft = worldX * nextZoom - cursorX;
+        viewport.scrollLeft = canvasGutter() + worldX * nextZoom - cursorX;
         viewport.scrollTop = worldY * nextZoom - cursorY;
         renderMinimapWindow();
         status.textContent = `Canvas zoom: ${Math.round(state.zoom * 100)}%.`;
@@ -2092,7 +2111,7 @@
         point.x = event.clientX;
         point.y = event.clientY;
         const world = point.matrixTransform(minimapSvg.getScreenCTM().inverse());
-        viewport.scrollLeft = world.x * state.zoom - viewport.clientWidth / 2;
+        viewport.scrollLeft = canvasGutter() + world.x * state.zoom - viewport.clientWidth / 2;
         viewport.scrollTop = world.y * state.zoom - viewport.clientHeight / 2;
         renderMinimapWindow();
       });
