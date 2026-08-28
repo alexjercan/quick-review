@@ -28,6 +28,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Improve canvas panning, use inline Ask and Comment composers, remove the
   viewed-state approval gate, show enhancement progress, and render collapsible
   highlighted code projections linked to their source nodes.
+- Add an edge-ranked hierarchy layout, an automatically rebased infinite-feeling
+  canvas, a grid that follows panning, and Ctrl+Enter submission for inline Ask
+  and Comment forms.
 
 ### Packaging
 

@@ -58,6 +58,14 @@
 - Render exact code as a collapsible, linked client-side projection node with
   line numbers and syntax colors. It is not an evidence claim or graph artifact
   node.
+- Make the canvas feel infinite by starting in a large centered world and
+  rebasing coordinates near its edges without moving visible nodes. Move the
+  grid with that world.
+- Rank visible roots from their directed graph edges and place ranks on distinct
+  hierarchy levels. Place direct children in one child rank instead of a fixed
+  two-column grid. Manual node movement overrides automatic root placement.
+- Submit inline Ask and Comment forms with Ctrl+Enter or Command+Enter while
+  preserving plain Enter for multiline text.
 
 ## Compatibility direction
 

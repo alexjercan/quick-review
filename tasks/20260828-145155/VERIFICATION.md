@@ -26,6 +26,9 @@
   and Comment composers, visible in-progress enhancement state, collapsible
   linked code projections, line numbers, and syntax colors. Captured and
   inspected `/tmp/quick-review-graph-polish.png`.
+- A second Chromium pass verified directed hierarchy ranks, coordinate rebasing
+  from the canvas edge with less than 0.01 pixel visual drift, continued pan in
+  both axes, moving grid coordinates, and Ctrl+Enter Ask submission.
 - The top-center target was 18.08 pixels below the viewport top and 0.10 pixels
   from its horizontal center in a 1600x1000 Chromium viewport.
 - Captured and inspected `/tmp/quick-review-graph-production.png`. The production
