@@ -41,7 +41,10 @@
 
 - Keep `Project canvas` as the permanent first workspace tab. `Focus` opens a
   synchronized tab for a node without removing that node from the canvas.
-- A focused tab renders the same mutable node and children at a stable origin.
+- A focused tab for a container renders its contents as the tab's root graph;
+  it does not wrap those contents in another copy of the container node. A leaf
+  with no internal graph renders the leaf node itself.
+- Focused contents use the same mutable child nodes as the project canvas.
   Enhancement in either view therefore updates both views instead of creating a
   stale snapshot.
 - Closing a focused tab returns to the unchanged project canvas. Full-screen

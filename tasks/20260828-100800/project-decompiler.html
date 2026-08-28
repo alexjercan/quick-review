@@ -1332,12 +1332,18 @@
         const focused = state.activeTab === "canvas" ? null : findNode(state.activeTab)?.node;
         viewport.classList.toggle("focus-mode", Boolean(focused));
         if (focused) {
-          focused.expanded = Boolean(focused.children?.length) || focused.expanded;
           const banner = document.createElement("div");
           banner.className = "focus-banner";
-          banner.textContent = `Focused projection / ${focused.title}`;
-          canvas.append(banner);
-          canvas.append(renderNode(focused, findNode(focused.id)?.parent || null, { x: 45, y: 70, projection: true }));
+          if (focused.children?.length) {
+            banner.textContent = `${focused.title} / contents`;
+            canvas.append(banner);
+            for (const child of focused.children) canvas.append(renderNode(child, focused));
+            drawLinks(rootEdges, focused.children, focused.links || []);
+          } else {
+            banner.textContent = `Focused leaf / ${focused.title}`;
+            canvas.append(banner);
+            canvas.append(renderNode(focused, findNode(focused.id)?.parent || null, { x: 45, y: 70, projection: true }));
+          }
         } else {
           for (const node of nodes) canvas.append(renderNode(node, null));
           drawLinks(rootEdges, nodes, rootLinks);
@@ -1492,7 +1498,7 @@
         tabs.append(createTab("canvas", "Project canvas", false));
         for (const id of state.tabs) {
           const node = findNode(id)?.node;
-          if (node) tabs.append(createTab(id, node.title, true));
+          if (node) tabs.append(createTab(id, node.children?.length ? `${node.title} / contents` : node.title, true));
         }
       }
 
@@ -1515,7 +1521,10 @@
         state.ask = null;
         viewport.scrollTo({ left: 0, top: 0 });
         render();
-        status.textContent = `Opened ${findNode(id)?.node.title} as a synchronized focused projection.`;
+        const node = findNode(id)?.node;
+        status.textContent = node?.children?.length
+          ? `Opened the contents of ${node.title} as a synchronized focused projection.`
+          : `Opened ${node?.title || id} as a focused leaf.`;
       }
 
       function activateTab(id) {
@@ -1582,6 +1591,7 @@
 
       function redrawParentEdges(parent) {
         if (!parent) drawLinks(rootEdges, nodes, rootLinks);
+        else if (state.activeTab === parent.id) drawLinks(rootEdges, parent.children || [], parent.links || []);
         else {
           const parentElement = canvas.querySelector(`[data-id="${parent.id}"]`);
           const svg = parentElement?.querySelector(":scope > .node-body > .nested-canvas > .nested-edges");

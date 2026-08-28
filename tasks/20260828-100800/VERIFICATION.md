@@ -16,9 +16,13 @@
   views, node questions, and the PR overlay - passed.
 - Drove the rendered page through Chromium's DevTools Protocol - passed. The
   check proved that the initial root layout has no overlapping nodes, `Focus`
-  opens a synchronized Review core tab, `Ask` renders a fixed overlay above the
-  graph, wheel input increases zoom, and dragging the background changes both
-  viewport scroll axes.
+  opens a synchronized Review core tab containing its child nodes without the
+  outer Review core wrapper, a focused Pi extension leaf shows only that leaf,
+  `Ask` renders a fixed overlay above the graph, wheel input increases zoom, and
+  dragging the background changes both viewport scroll axes.
+- Captured and inspected the focused Review core tab at 1600x1000. Its Git,
+  lifecycle, server, state, protocol, and recovered-architecture nodes are the
+  root graph of the tab.
 
 ## Scope
 
