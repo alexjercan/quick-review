@@ -406,22 +406,6 @@
         user-select: none;
       }
 
-      .focus-mode .canvas {
-        width: 1800px;
-        height: 1200px;
-      }
-
-      .focus-banner {
-        position: absolute;
-        z-index: 2;
-        top: 22px;
-        left: 28px;
-        padding: 5px 9px;
-        border: 1px solid #75672b;
-        background: #242424;
-        color: var(--yellow);
-      }
-
       .canvas {
         position: relative;
         width: 2300px;
@@ -456,6 +440,7 @@
         display: flex;
         flex-direction: column;
         min-width: 0;
+        overflow: hidden;
         border: 1px solid var(--strong);
         border-left: 3px solid var(--blue);
         background: rgba(36, 36, 36, 0.98);
@@ -1297,8 +1282,8 @@
       function measure(node) {
         const base = collapsedSize(node);
         if (!node.expanded || !node.children?.length) {
-          if (node.detail === 1) return { width: Math.max(base.width, 320), height: Math.max(base.height, 245) };
-          if (node.detail >= 2) return { width: Math.max(base.width, 450), height: Math.max(base.height, 340) };
+          if (node.detail === 1) return { width: Math.max(base.width, 320), height: base.height + 85 };
+          if (node.detail >= 2) return { width: Math.max(base.width, 450), height: base.height + 190 };
           return base;
         }
         let right = 0;
@@ -1332,16 +1317,10 @@
         const focused = state.activeTab === "canvas" ? null : findNode(state.activeTab)?.node;
         viewport.classList.toggle("focus-mode", Boolean(focused));
         if (focused) {
-          const banner = document.createElement("div");
-          banner.className = "focus-banner";
           if (focused.children?.length) {
-            banner.textContent = `${focused.title} / contents`;
-            canvas.append(banner);
             for (const child of focused.children) canvas.append(renderNode(child, focused));
             drawLinks(rootEdges, focused.children, focused.links || []);
           } else {
-            banner.textContent = `Focused leaf / ${focused.title}`;
-            canvas.append(banner);
             canvas.append(renderNode(focused, findNode(focused.id)?.parent || null, { x: 45, y: 70, projection: true }));
           }
         } else {
