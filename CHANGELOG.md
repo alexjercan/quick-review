@@ -14,16 +14,17 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Add `quick_review_wait` so the review page can reach an agent that cannot be
   interrupted. A wait that expires or is cancelled leaves the reviewer's
   question queued.
-- Add `--scope head|diff` progressive project graphs with nested enhancement,
-  synchronized focus tabs, project-tree routing, exact code nodes, questions,
+- Add progressive target-snapshot and base-to-target project graphs with nested
+  enhancement, synchronized focus tabs, project-tree routing, exact code nodes, questions,
   comments, minimap navigation, pan, zoom, and draggable graph nodes.
 - Add independently versioned graph artifacts, atomic expansion deltas, graph
   state, and graph completion events for Pi and Claude Code.
 
 ### Changed
 
-- Make the diff project graph the default `/quick-review` experience and remove
-  the linear walkthrough tools from both host adapters.
+- Make the project graph the default `/quick-review` experience and remove the
+  linear walkthrough tools from both host adapters. A base option automatically
+  selects diff mode; otherwise Quick Review analyzes one target snapshot.
 
 ### Packaging
 

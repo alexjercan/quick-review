@@ -1,14 +1,14 @@
 ---
 description: Review a git range and open the local Quick Review page
-argument-hint: "[--scope head|diff] [--base <ref>] [--target <ref>] [--repo <path>] [--no-open]"
+argument-hint: "[--base <ref>] [--target <ref>] [--repo <path>] [--no-open]"
 ---
 
 Run a Quick Review of this repository and stay with it until the reviewer decides.
 
 Arguments: $ARGUMENTS
 
-Map them onto `quick_review_start`: `--scope` to `scope`, `--base` to `base`,
-`--target` to `target`, `--repo` to `repo`, and `--no-open` to `open: false`. Omit anything the user did
+Map them onto `quick_review_start`: `--base` to `base`, `--target` to `target`,
+`--repo` to `repo`, and `--no-open` to `open: false`. Omit anything the user did
 not give. With no arguments, call it with no arguments.
 
 Then run this loop:

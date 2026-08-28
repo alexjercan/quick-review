@@ -11,7 +11,6 @@ import {
   assertGraphRange,
   parseGraphDelta,
   parseProjectGraph,
-  type GraphScope,
 } from "./graph-contract.ts";
 import { createGraphQueueHost, type GraphQueueHost } from "./graph-host.ts";
 import {
@@ -59,20 +58,15 @@ const TOOLS = [
   {
     name: "quick_review_start",
     description:
-      "Plan a progressive exact-revision project graph. Defaults to a diff against the repository default branch.",
+      "Plan a progressive project graph. Without base it analyzes one target snapshot; with base it analyzes a diff.",
     inputSchema: {
       type: "object",
       properties: {
-        scope: {
-          type: "string",
-          enum: ["head", "diff"],
-          description: "Analyze committed HEAD or a diff. Defaults to diff.",
-        },
         base: {
           type: "string",
           maxLength: LIMITS.ref,
           description:
-            "Diff base. Defaults to the merge base with the repository default branch.",
+            "Diff base. Its presence selects a base-to-target overlay.",
         },
         target: {
           type: "string",
@@ -215,14 +209,6 @@ function optionalFlag(
   return value;
 }
 
-function optionalScope(source: Record<string, unknown>): GraphScope {
-  const value = source.scope;
-  if (value === undefined) return "diff";
-  if (value !== "head" && value !== "diff")
-    throw invalidParams("scope must be head or diff");
-  return value;
-}
-
 function requiredCount(
   source: Record<string, unknown>,
   name: string,
@@ -292,7 +278,12 @@ export function createQuickReviewMcp(options: McpOptions = {}): QuickReviewMcp {
 
   const start = async (params: unknown) => {
     const source = fields(params);
-    const scope = optionalScope(source);
+    if (
+      Object.keys(source).some(
+        (key) => !["base", "target", "repo", "open"].includes(key),
+      )
+    )
+      throw invalidParams("quick_review_start has an unknown argument");
     const baseRef = optionalText(source, "base", LIMITS.ref);
     const targetRef = optionalText(source, "target", LIMITS.ref);
     const repository = optionalText(source, "repo", LIMITS.ref * 4);
@@ -301,11 +292,9 @@ export function createQuickReviewMcp(options: McpOptions = {}): QuickReviewMcp {
       throw new Error(
         "a Quick Review is already open; finish it on the page or call quick_review_close",
       );
-    if (scope === "head" && baseRef)
-      throw new Error("base is not used with HEAD scope");
     const plan = await planAnalysis({
       cwd,
-      scope,
+      scope: baseRef ? "diff" : "head",
       repository,
       baseRef,
       targetRef,

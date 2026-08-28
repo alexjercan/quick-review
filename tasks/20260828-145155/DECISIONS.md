@@ -32,9 +32,10 @@
 
 ## Implementation gates
 
-- Make the project graph the only host-adapter experience. Plain
-  `/quick-review` and unscoped MCP start default to diff; `--scope head` selects
-  a committed snapshot. Do not expose the linear walkthrough submission tool.
+- Make the project graph the only host-adapter experience. Do not expose a
+  scope option: without `--base`, analyze one committed target snapshot; with
+  `--base`, analyze its base-to-target diff. Do not expose the linear
+  walkthrough submission tool.
 - Keep `approved` and `changes-requested` in both scopes. In HEAD scope,
   approval accepts the exact committed architecture snapshot; it does not claim
   that a diff is ready to merge.

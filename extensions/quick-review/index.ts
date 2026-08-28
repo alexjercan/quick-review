@@ -256,14 +256,7 @@ export default function quickReview(pi: ExtensionAPI): void {
   pi.registerCommand("quick-review", {
     description: "Open a progressive exact-revision project graph",
     getArgumentCompletions: (prefix: string) => {
-      const flags = [
-        "--scope",
-        "--base",
-        "--target",
-        "--repo",
-        "--no-open",
-        "--help",
-      ]
+      const flags = ["--base", "--target", "--repo", "--no-open", "--help"]
         .filter((flag) => flag.startsWith(prefix))
         .map((flag) => ({ value: flag, label: flag }));
       return flags.length > 0 ? flags : null;
@@ -286,11 +279,9 @@ export default function quickReview(pi: ExtensionAPI): void {
           throw new Error(
             "a Quick Review is already open; finish it on the page or run /quick-review-close",
           );
-        if (options.scope === "head" && options.baseRef)
-          throw new Error("--base is not used with --scope head");
         const plan = await planAnalysis({
           cwd: ctx.cwd,
-          scope: options.scope,
+          scope: options.baseRef ? "diff" : "head",
           repository: options.repository,
           baseRef: options.baseRef,
           targetRef: options.targetRef,

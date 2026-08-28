@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseOptions, tokenize } from "../extensions/quick-review/options.ts";
 
-test("defaults to the diff project graph", () => {
+test("defaults leave snapshot and diff selection to the base option", () => {
   const options = parseOptions("");
-  assert.deepEqual(options, { scope: "diff", open: true, help: false });
+  assert.deepEqual(options, { open: true, help: false });
 });
 
 test("reads separated and inline values", () => {
@@ -29,13 +29,6 @@ test("quoted values keep their spaces", () => {
   );
 });
 
-test("graph scopes are explicit", () => {
-  assert.equal(parseOptions("--scope head").scope, "head");
-  assert.equal(parseOptions("--scope=diff").scope, "diff");
-  assert.throws(() => parseOptions("--scope tree"), /head or diff/);
-  assert.throws(() => parseOptions("--scope head --scope diff"), /given twice/);
-});
-
 test("--no-open and --help are recognised", () => {
   assert.equal(parseOptions("--no-open").open, false);
   assert.equal(parseOptions("--help").help, true);
@@ -44,6 +37,7 @@ test("--no-open and --help are recognised", () => {
 
 test("rejects unknown options, missing values, and repeats", () => {
   assert.throws(() => parseOptions("--nope"), /unknown option: --nope/);
+  assert.throws(() => parseOptions("--scope head"), /unknown option: --scope/);
   assert.throws(() => parseOptions("main"), /unknown option: main/);
   assert.throws(() => parseOptions("--base"), /--base needs a value/);
   assert.throws(() => parseOptions("--base a --base b"), /given twice/);

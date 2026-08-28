@@ -120,7 +120,8 @@ async function act(url: string, request: object) {
 
 async function opened(session: Client, scope: "head" | "diff" = "diff") {
   const started = await session.tool("quick_review_start", {
-    ...(scope === "head" ? { scope } : {}),
+    ...(scope === "diff" ? { base: session.fixture.base } : {}),
+    target: "HEAD",
     open: false,
   });
   const range = RANGE.exec(body(started));
@@ -169,11 +170,11 @@ test("MCP lists only progressive graph tools", async () => {
   }
 });
 
-test("unscoped MCP start defaults to a diff graph", async () => {
+test("unscoped MCP start defaults to a committed HEAD graph", async () => {
   const session = client();
   try {
     const started = await session.tool("quick_review_start", { open: false });
-    assert.match(body(started), /"scope": "diff"/);
+    assert.match(body(started), /"scope": "head"/);
     assert.match(body(started), /quick_review_graph_submit/);
   } finally {
     await session.cleanup();
@@ -290,6 +291,11 @@ test("malformed and out-of-order graph calls are tool errors", async () => {
   const session = client();
   try {
     assert.equal((await session.tool("quick_review_wait")).isError, true);
+    assert.equal(
+      (await session.tool("quick_review_start", { scope: "head", open: false }))
+        .isError,
+      true,
+    );
     assert.equal(
       (
         await session.tool("quick_review_graph_submit", {

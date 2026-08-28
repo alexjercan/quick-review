@@ -12,7 +12,7 @@
 
 ## Implementation
 
-- `npm run check` passed with 113 tests after graph mode replaced the adapter
+- `npm run check` passed with 112 tests after graph mode replaced the adapter
   walkthrough paths. This includes strict graph and delta
   parsing, cycles and hostile text, atomic graph state, HEAD and diff planning,
   moved revisions, queue cancellation, real loopback graph actions, Pi adapter
@@ -32,9 +32,10 @@
 
 ## Scope delivered
 
-- Made plain `/quick-review` and unscoped MCP start open a diff project graph.
-  `--scope head` selects a committed snapshot. Linear walkthrough tools are no
-  longer registered by either host adapter.
+- Made plain `/quick-review` and unscoped MCP start open a committed target
+  graph. Supplying `--base` or MCP `base` selects a diff overlay. There is no
+  public scope option. Linear walkthrough tools are no longer registered by
+  either host adapter.
 - Added independently versioned graph artifact, state, delta, and completion
   contracts with documented bounds.
 - Added committed HEAD and exact diff inventory planning.

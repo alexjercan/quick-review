@@ -70,13 +70,13 @@ async function waitFor<T>(probe: () => T | undefined): Promise<T> {
   throw new Error("timed out waiting for the Pi harness");
 }
 
-test("plain quick-review defaults to the diff project graph", async () => {
+test("plain quick-review defaults to the committed HEAD graph", async () => {
   const base = start();
   try {
     await base.pi.run("quick-review", "--no-open");
     const request = base.pi.sent[0]!;
     assert.equal(request.customType, "quick-review-graph-request");
-    assert.equal(request.details?.scope, "diff");
+    assert.equal(request.details?.scope, "head");
     assert.match(request.content, /quick_review_graph_submit/);
     assert.ok(base.pi.activeTools.includes("quick_review_graph_submit"));
     assert.ok(base.pi.activeTools.includes("quick_review_graph_expand"));
@@ -95,7 +95,7 @@ test("help and non-page modes describe the graph command", async () => {
   const base = start();
   try {
     await base.pi.run("quick-review", "--help");
-    assert.match(base.pi.notifications[0]!.message, /Defaults to diff/);
+    assert.match(base.pi.notifications[0]!.message, /With no --base/);
   } finally {
     base.cleanup();
   }
@@ -116,7 +116,11 @@ test("help and non-page modes describe the graph command", async () => {
 test("the Pi session enhances, answers, and approves a diff graph", async () => {
   const base = start();
   try {
-    const review = await open(base);
+    const review = await open(
+      base,
+      `--base ${base.fixture.base} --target HEAD --no-open`,
+    );
+    assert.equal(review.scope, "diff");
     const enhancing = review.act({ action: "enhance", node: "greeting" });
     const expansion = await waitFor(() =>
       base.pi.sent.find((item) => item.customType === "quick-review-expansion"),
@@ -159,10 +163,10 @@ test("the Pi session enhances, answers, and approves a diff graph", async () => 
   }
 });
 
-test("explicit HEAD scope binds and approves one committed snapshot", async () => {
+test("a target without a base binds one committed snapshot", async () => {
   const base = start();
   try {
-    const review = await open(base, "--scope head --no-open");
+    const review = await open(base, "--target HEAD --no-open");
     assert.equal(review.scope, "head");
     assert.equal(review.baseRevision, review.revision);
     await review.act({ action: "mark-viewed", node: "greeting" });

@@ -6,24 +6,22 @@ versions.
 
 ## Inputs
 
-| Input      | Source               | Default                            |
-| ---------- | -------------------- | ---------------------------------- |
-| Repository | `--repo <path>`      | Git root of the session directory  |
-| Scope      | `--scope head\|diff` | `diff`                             |
-| Base ref   | `--base <ref>`       | merge base with the default branch |
-| Target ref | `--target <ref>`     | `HEAD`                             |
+| Input      | Source           | Default                           |
+| ---------- | ---------------- | --------------------------------- |
+| Repository | `--repo <path>`  | Git root of the session directory |
+| Base ref   | `--base <ref>`   | omitted                           |
+| Target ref | `--target <ref>` | `HEAD`                            |
 
-Diff scope resolves one exact base-to-target range and captures its patch. HEAD
-scope binds both revisions to one committed target and does not accept a base.
+Without a base, planning binds both revisions to one committed target snapshot.
+With a base, it resolves one exact base-to-target range and captures its patch.
 Dirty worktree files are reported but excluded.
 
-The default branch is `origin/HEAD`, else the first existing branch of `main`,
-`master`, `trunk`, or `develop`. Refs are rejected when empty, option-like,
+Refs are rejected when empty, option-like,
 longer than 256 characters, or contain whitespace, controls, or backslashes.
 
-An explicit base must keep resolving to the same commit. A defaulted base keeps
-merge-base semantics. Every recheck reads target, base, then target so a moving
-ref cannot pass as one snapshot. HEAD scope reads its target twice.
+A base must keep resolving to the same commit. Every diff recheck reads target,
+base, then target so a moving ref cannot pass as one snapshot. Snapshot mode
+reads its target twice.
 
 ## Graph artifact version 1
 

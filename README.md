@@ -1,8 +1,9 @@
 # Quick Review
 
 `/quick-review` opens a progressive exact-revision project graph written and
-answered by the session's own agent. It analyzes a diff by default or a
-committed HEAD snapshot on request. It runs in Pi and Claude Code.
+answered by the session's own agent. Without a base it analyzes one committed
+snapshot. With a base it overlays a base-to-target diff. It runs in Pi and
+Claude Code.
 
 ## Pi
 
@@ -13,9 +14,9 @@ pi install npm:@alexjercan/quick-review   # or: pi install /path/to/quick-review
 Then in the session:
 
 ```
-/quick-review                                      # diff graph
-/quick-review --base origin/main --target HEAD     # explicit diff graph
-/quick-review --scope head                         # committed snapshot
+/quick-review                                      # committed HEAD graph
+/quick-review --target release                     # committed release graph
+/quick-review --base origin/main --target HEAD     # diff overlay
 /quick-review --repo /path/to/repo --no-open
 /quick-review --help
 ```

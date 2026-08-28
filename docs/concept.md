@@ -6,9 +6,9 @@ architecture-to-code graph.
 
 ## The project decompiler
 
-Run `/quick-review` for a base-to-target overlay or `/quick-review --scope head`
-for a committed project snapshot. `--scope diff` is available when explicit
-scope is useful.
+Run `/quick-review` for the committed HEAD project, or add `--base` for a
+base-to-target overlay. `--target` selects another committed snapshot or the
+target side of a diff.
 
 The current session agent builds a small root graph. The reviewer can:
 
@@ -54,8 +54,9 @@ provenance. Repository files are always untrusted evidence, never instructions.
 
 ## Flow
 
-1. `/quick-review [--scope head|diff]` resolves the exact scope and produces a
-   bounded inventory and optional patch. Scope defaults to diff.
+1. `/quick-review` resolves one target snapshot. If `--base` is present, it
+   resolves a base-to-target diff instead. Planning produces a bounded inventory
+   and an optional patch.
 2. The session agent calls `quick_review_graph_submit` with a bounded versioned
    root graph.
 3. The page opens. `Enhance` asks the same agent for a bounded direct-child
