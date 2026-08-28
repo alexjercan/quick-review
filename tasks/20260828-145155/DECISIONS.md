@@ -66,6 +66,8 @@
   two-column grid. Manual node movement overrides automatic root placement.
 - Submit inline Ask and Comment forms with Ctrl+Enter or Command+Enter while
   preserving plain Enter for multiline text.
+- Indent Project structure descendants with one fixed-width guide segment per
+  ancestor and a visible branch connector for the direct parent.
 
 ## Compatibility direction
 

@@ -180,6 +180,7 @@ test("graph page keeps hostile graph text inside encoded data", () => {
   assert.match(GRAPH_PAGE_JS, /e\.target\.closest\('\.node,button/);
   assert.match(GRAPH_PAGE_JS, /WORLD=100000/);
   assert.match(GRAPH_PAGE_JS, /function arrangeRoots/);
+  assert.match(GRAPH_PAGE_JS, /tree-guide/);
   assert.match(GRAPH_PAGE_JS, /function syncGrid/);
   assert.match(GRAPH_PAGE_JS, /e\.ctrlKey\|\|e\.metaKey/);
   assert.doesNotThrow(() => new Function(GRAPH_PAGE_JS));
