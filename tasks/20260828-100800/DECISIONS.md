@@ -46,17 +46,23 @@
   with no internal graph renders the leaf node itself.
 - Focused contents use the same mutable child nodes as the project canvas.
   Enhancement in either view therefore updates both views instead of creating a
-  stale snapshot.
+  stale snapshot. Focus also preserves current detail: a collapsed container
+  first shows the container node, then switches to its contents only after the
+  reviewer enhances it.
 - Closing a focused tab returns to the unchanged project canvas. Full-screen
   mode can hide the outer project chrome without changing graph state.
 
 ## Canvas interaction
 
-- Background pointer dragging pans by default. Node headers still drag nodes.
+- Background pointer dragging pans by default. Non-interactive node surfaces
+  drag nodes.
 - The wheel zooms around the pointer location. Code blocks keep their own
   scrolling.
 - Enhancement reflows the expanded container and all ancestor containers, then
   packs the root graph into non-overlapping rows.
+- Grow the logical canvas and root SVG view box from current node bounds. Nodes
+  dragged below or to the right of the initial canvas keep their edges and add
+  scrollable canvas area.
 - Size nodes from their complete visible summary and highlighted code instead
   of clipping content to one uniform card height. Code blocks expand their node
   in both axes; they do not introduce an internal scrollbar.

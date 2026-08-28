@@ -34,6 +34,12 @@
 - Drove a pointer drag from the prose area of Pi extension through Chromium's
   DevTools Protocol. Both model coordinates increased and the browser selection
   remained empty - passed.
+- Moved a root node below y=2300 and a focused child below y=2600, then checked
+  canvas height, viewport scroll height, SVG view-box height, and edge bounds -
+  passed. Root and focused canvases grow past the initial 1500-pixel height.
+- Focused collapsed Review lifecycle - passed: the tab showed only the lifecycle
+  node. Enhanced it in that tab - passed: the same tab switched to its four
+  child nodes and updated its label to `Review lifecycle / contents`.
 
 ## Scope
 

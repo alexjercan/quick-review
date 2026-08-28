@@ -1321,14 +1321,17 @@
         const focused = state.activeTab === "canvas" ? null : findNode(state.activeTab)?.node;
         viewport.classList.toggle("focus-mode", Boolean(focused));
         if (focused) {
-          if (focused.children?.length) {
+          if (focused.children?.length && focused.expanded) {
             for (const child of focused.children) canvas.append(renderNode(child, focused));
+            updateRootBounds(focused.children);
             drawLinks(rootEdges, focused.children, focused.links || []);
           } else {
             canvas.append(renderNode(focused, findNode(focused.id)?.parent || null, { x: 45, y: 70, projection: true }));
+            updateRootBounds([focused], { x: 45, y: 70 });
           }
         } else {
           for (const node of nodes) canvas.append(renderNode(node, null));
+          updateRootBounds(nodes);
           drawLinks(rootEdges, nodes, rootLinks);
         }
         renderTree();
@@ -1338,6 +1341,21 @@
         canvas.style.setProperty("--zoom", state.zoom);
         const visible = walk().filter(({ node }) => matchesFilter(node)).length;
         count.textContent = `${visible} visible nodes / ${walk().length} indexed`;
+      }
+
+      function updateRootBounds(items, override) {
+        let right = 0;
+        let bottom = 0;
+        for (const item of items) {
+          const size = measure(item);
+          right = Math.max(right, (override?.x ?? item.x) + size.width);
+          bottom = Math.max(bottom, (override?.y ?? item.y) + size.height);
+        }
+        const width = Math.max(2300, Math.ceil(right + 180));
+        const height = Math.max(1500, Math.ceil(bottom + 180));
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
+        rootEdges.setAttribute("viewBox", `0 0 ${width} ${height}`);
       }
 
       function renderNode(node, parent, options = {}) {
@@ -1481,7 +1499,7 @@
         tabs.append(createTab("canvas", "Project canvas", false));
         for (const id of state.tabs) {
           const node = findNode(id)?.node;
-          if (node) tabs.append(createTab(id, node.children?.length ? `${node.title} / contents` : node.title, true));
+          if (node) tabs.append(createTab(id, node.children?.length && node.expanded ? `${node.title} / contents` : node.title, true));
         }
       }
 
@@ -1505,9 +1523,9 @@
         viewport.scrollTo({ left: 0, top: 0 });
         render();
         const node = findNode(id)?.node;
-        status.textContent = node?.children?.length
+        status.textContent = node?.children?.length && node.expanded
           ? `Opened the contents of ${node.title} as a synchronized focused projection.`
-          : `Opened ${node?.title || id} as a focused leaf.`;
+          : `Opened ${node?.title || id} at its current detail level.`;
       }
 
       function activateTab(id) {
@@ -1574,8 +1592,13 @@
       }
 
       function redrawParentEdges(parent) {
-        if (!parent) drawLinks(rootEdges, nodes, rootLinks);
-        else if (state.activeTab === parent.id) drawLinks(rootEdges, parent.children || [], parent.links || []);
+        if (!parent) {
+          updateRootBounds(nodes);
+          drawLinks(rootEdges, nodes, rootLinks);
+        } else if (state.activeTab === parent.id) {
+          updateRootBounds(parent.children || []);
+          drawLinks(rootEdges, parent.children || [], parent.links || []);
+        }
         else {
           const parentElement = canvas.querySelector(`[data-id="${parent.id}"]`);
           const svg = parentElement?.querySelector(":scope > .node-body > .nested-canvas > .nested-edges");
