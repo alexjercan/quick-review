@@ -37,9 +37,32 @@
   Gruber-inspired near-black, warm yellow, green, brown, red, and neutral color
   scheme.
 
+## Keep floating context and add focused projections
+
+- Keep `Project canvas` as the permanent first workspace tab. `Focus` opens a
+  synchronized tab for a node without removing that node from the canvas.
+- A focused tab renders the same mutable node and children at a stable origin.
+  Enhancement in either view therefore updates both views instead of creating a
+  stale snapshot.
+- Closing a focused tab returns to the unchanged project canvas. Full-screen
+  mode can hide the outer project chrome without changing graph state.
+
+## Canvas interaction
+
+- Background pointer dragging pans by default. Node headers still drag nodes.
+- The wheel zooms around the pointer location. Code blocks keep their own
+  scrolling.
+- Enhancement reflows the expanded container and all ancestor containers, then
+  packs the root graph into non-overlapping rows.
+- Size collapsed nodes from their visible summary and highlighted code instead
+  of clipping content to one uniform card height.
+- Render questions in one fixed top-level overlay layer. Nested stacking
+  contexts cannot place a graph node above that layer.
+
 ## Artifact
 
 - `project-decompiler.html` is the interactive PoC. Open it directly in a
-  browser. The review core starts expanded to demonstrate containment. Drag any
-  node, enhance `Review lifecycle` or `Action server` for a second nested graph,
-  and use `Ask` to attach a simulated session-agent explanation.
+  browser. The review core starts expanded to demonstrate containment. Drag or
+  pan the canvas, wheel to zoom, focus nodes into synchronized tabs, enhance
+  `Review lifecycle` or `Action server`, and use `Ask` to attach a simulated
+  session-agent explanation.

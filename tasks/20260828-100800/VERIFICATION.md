@@ -11,8 +11,14 @@
 - Captured a 1600x1000 headless Chromium screenshot and inspected the rendered
   Gruber-style canvas, expanded containment, graph edges, code highlighting,
   project tree, and first-class decompiler node.
-- Checked required hooks for nested canvases, pointer dragging, decompiler and
-  code-level views, node questions, and the PR overlay - passed.
+- Checked required hooks for nested canvases, pointer dragging, background
+  panning, wheel zoom, focused tabs, full-screen mode, decompiler and code-level
+  views, node questions, and the PR overlay - passed.
+- Drove the rendered page through Chromium's DevTools Protocol - passed. The
+  check proved that the initial root layout has no overlapping nodes, `Focus`
+  opens a synchronized Review core tab, `Ask` renders a fixed overlay above the
+  graph, wheel input increases zoom, and dragging the background changes both
+  viewport scroll axes.
 
 ## Scope
 

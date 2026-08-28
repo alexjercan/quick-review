@@ -294,7 +294,7 @@
       .workspace {
         grid-area: work;
         display: grid;
-        grid-template-rows: 35px minmax(0, 1fr);
+        grid-template-rows: 35px 32px minmax(0, 1fr);
         min-width: 0;
         min-height: 0;
       }
@@ -327,6 +327,53 @@
         margin-left: auto;
       }
 
+      .workspace-tabs {
+        display: flex;
+        align-items: end;
+        gap: 3px;
+        min-width: 0;
+        padding: 4px 7px 0;
+        overflow-x: auto;
+        border-bottom: 1px solid var(--line);
+        background: #1d1d1d;
+      }
+
+      .workspace-tab {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 110px;
+        max-width: 240px;
+        height: 27px;
+        padding: 0 8px;
+        border: 1px solid var(--line);
+        border-bottom: 0;
+        background: #242424;
+        color: var(--muted);
+        cursor: pointer;
+      }
+
+      .workspace-tab.active {
+        border-color: #75672b;
+        background: var(--selection);
+        color: var(--yellow);
+      }
+
+      .tab-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .tab-close {
+        margin-left: auto;
+        color: var(--dim);
+      }
+
+      .tab-close:hover {
+        color: var(--red);
+      }
+
       .toolbar-button {
         min-width: 28px;
         height: 25px;
@@ -343,6 +390,8 @@
         position: relative;
         min-height: 0;
         overflow: auto;
+        cursor: grab;
+        overscroll-behavior: none;
         background-color: var(--canvas);
         background-image:
           linear-gradient(rgba(255, 221, 51, 0.025) 1px, transparent 1px),
@@ -350,6 +399,27 @@
           radial-gradient(#3b3b3b 0.7px, transparent 0.7px);
         background-position: 0 0, 0 0, 0 0;
         background-size: 90px 90px, 90px 90px, 18px 18px;
+      }
+
+      .viewport.panning {
+        cursor: grabbing;
+        user-select: none;
+      }
+
+      .focus-mode .canvas {
+        width: 1800px;
+        height: 1200px;
+      }
+
+      .focus-banner {
+        position: absolute;
+        z-index: 2;
+        top: 22px;
+        left: 28px;
+        padding: 5px 9px;
+        border: 1px solid #75672b;
+        background: #242424;
+        color: var(--yellow);
       }
 
       .canvas {
@@ -470,7 +540,7 @@
       .node-body {
         min-height: 0;
         padding: 9px 10px 10px;
-        overflow: hidden;
+        overflow: visible;
       }
 
       .node-path {
@@ -483,17 +553,8 @@
       }
 
       .node-summary {
-        display: -webkit-box;
         margin: 0;
-        overflow: hidden;
         color: #c8c8c8;
-        -webkit-box-orient: vertical;
-        -webkit-line-clamp: 2;
-      }
-
-      .node.detail-1:not(.has-children) .node-summary,
-      .node.detail-2:not(.has-children) .node-summary {
-        -webkit-line-clamp: 5;
       }
 
       .node-evidence {
@@ -637,30 +698,24 @@
         color: var(--muted);
       }
 
+      .overlay-layer {
+        position: fixed;
+        z-index: 50000;
+        inset: 0;
+        pointer-events: none;
+      }
+
       .ask-popover {
-        position: absolute;
-        z-index: 1000;
-        top: 34px;
-        right: -292px;
+        position: fixed;
+        z-index: 50001;
         width: 280px;
         padding: 10px;
         border: 1px solid var(--yellow-2);
         background: #202020;
         box-shadow: 0 10px 30px var(--shadow);
+        pointer-events: auto;
       }
 
-      .ask-popover::before {
-        position: absolute;
-        top: 13px;
-        left: -7px;
-        width: 11px;
-        height: 11px;
-        border-bottom: 1px solid var(--yellow-2);
-        border-left: 1px solid var(--yellow-2);
-        background: #202020;
-        content: "";
-        transform: rotate(45deg);
-      }
 
       .ask-popover strong {
         display: block;
@@ -690,6 +745,20 @@
       .filter-hidden {
         opacity: 0.13;
         pointer-events: none;
+      }
+
+      body.fullscreen .topbar,
+      body.fullscreen .sidebar,
+      body.fullscreen .statusbar {
+        display: none;
+      }
+
+      body.fullscreen .app {
+        grid-template: "work" minmax(0, 1fr) / minmax(0, 1fr);
+      }
+
+      body.fullscreen .workspace {
+        grid-area: work;
       }
 
       .statusbar {
@@ -778,11 +847,13 @@
           <div class="workspace-tools">
             <button class="toolbar-button" type="button" data-action="collapse" title="Collapse all">--</button>
             <button class="toolbar-button" type="button" data-action="reset" title="Reset layout">R</button>
+            <button class="toolbar-button" type="button" data-action="fullscreen" title="Toggle full screen">F</button>
             <button class="toolbar-button" type="button" data-zoom="out" title="Zoom out">-</button>
             <button class="toolbar-button" type="button" data-zoom="reset" title="Reset zoom">1:1</button>
             <button class="toolbar-button" type="button" data-zoom="in" title="Zoom in">+</button>
           </div>
         </div>
+        <div class="workspace-tabs" data-tabs aria-label="Focused graph views"></div>
         <div class="viewport" data-viewport>
           <div class="canvas" data-canvas>
             <svg class="edges" data-root-edges viewBox="0 0 2300 1500" aria-hidden="true">
@@ -804,6 +875,7 @@
         <span class="status-message" data-status>Enhance Review core to inspect its internal graph.</span>
       </footer>
     </div>
+    <div class="overlay-layer" data-overlay></div>
 
     <script>
       const C = {
@@ -1180,6 +1252,9 @@
         answers: new Map(),
         filter: "",
         z: 10,
+        tabs: [],
+        activeTab: "canvas",
+        fullscreen: false,
       };
 
       const canvas = document.querySelector("[data-canvas]");
@@ -1188,6 +1263,8 @@
       const status = document.querySelector("[data-status]");
       const count = document.querySelector("[data-count]");
       const viewport = document.querySelector("[data-viewport]");
+      const tabs = document.querySelector("[data-tabs]");
+      const overlay = document.querySelector("[data-overlay]");
 
       function walk(items = nodes, parent = null, depth = 0, output = []) {
         for (const node of items) {
@@ -1206,9 +1283,14 @@
       }
 
       function collapsedSize(node) {
+        const codeLines = node.code ? node.code.split("\n").length : 0;
+        const codeHeight = codeLines ? 210 + Math.min(codeLines, 10) * 15 : 0;
+        const naturalHeight = node.children?.length
+          ? 145
+          : Math.max(170, codeHeight, node.role === "decompiler" ? 360 : 0);
         return {
-          width: node.width || (node.role === "decompiler" ? 430 : 232),
-          height: node.height || (node.role === "decompiler" ? 235 : node.code ? 170 : 140),
+          width: Math.max(node.width || 0, node.role === "decompiler" ? 500 : 250),
+          height: Math.max(node.height || 0, naturalHeight),
         };
       }
 
@@ -1245,18 +1327,31 @@
       }
 
       function render() {
-        canvas.querySelectorAll(":scope > .node").forEach((element) => element.remove());
+        canvas.querySelectorAll(":scope > .node, :scope > .focus-banner").forEach((element) => element.remove());
         rootEdges.querySelectorAll(".edge").forEach((edge) => edge.remove());
-        for (const node of nodes) canvas.append(renderNode(node, null));
-        drawLinks(rootEdges, nodes, rootLinks);
+        const focused = state.activeTab === "canvas" ? null : findNode(state.activeTab)?.node;
+        viewport.classList.toggle("focus-mode", Boolean(focused));
+        if (focused) {
+          focused.expanded = Boolean(focused.children?.length) || focused.expanded;
+          const banner = document.createElement("div");
+          banner.className = "focus-banner";
+          banner.textContent = `Focused projection / ${focused.title}`;
+          canvas.append(banner);
+          canvas.append(renderNode(focused, findNode(focused.id)?.parent || null, { x: 45, y: 70, projection: true }));
+        } else {
+          for (const node of nodes) canvas.append(renderNode(node, null));
+          drawLinks(rootEdges, nodes, rootLinks);
+        }
         renderTree();
+        renderTabs();
         renderMode();
+        renderOverlay();
         canvas.style.setProperty("--zoom", state.zoom);
         const visible = walk().filter(({ node }) => matchesFilter(node)).length;
         count.textContent = `${visible} visible nodes / ${walk().length} indexed`;
       }
 
-      function renderNode(node, parent) {
+      function renderNode(node, parent, options = {}) {
         const size = measure(node);
         const element = document.createElement("article");
         const filtered = !matchesFilter(node);
@@ -1271,8 +1366,8 @@
           filtered ? "filter-hidden" : "",
         ].filter(Boolean).join(" ");
         element.dataset.id = node.id;
-        element.style.left = `${node.x}px`;
-        element.style.top = `${node.y}px`;
+        element.style.left = `${options.x ?? node.x}px`;
+        element.style.top = `${options.y ?? node.y}px`;
         element.style.width = `${size.width}px`;
         element.style.height = `${size.height}px`;
         element.style.zIndex = String(node.z || 1);
@@ -1280,7 +1375,7 @@
         const head = document.createElement("header");
         head.className = "node-head";
         head.innerHTML = `<span class="node-symbol">${node.role === "decompiler" ? "::" : node.children?.length ? "+" : "fn"}</span><span class="node-title">${node.title}</span><span class="node-kind">${node.kind}</span>`;
-        bindDrag(head, element, node, parent);
+        if (!options.projection) bindDrag(head, element, node, parent);
         head.addEventListener("click", () => select(node.id));
         element.append(head);
 
@@ -1310,6 +1405,7 @@
         const ask = document.createElement("button");
         ask.type = "button";
         ask.className = "node-button";
+        ask.dataset.nodeAsk = node.id;
         ask.textContent = "Ask";
         ask.addEventListener("click", (event) => {
           event.stopPropagation();
@@ -1318,6 +1414,16 @@
           render();
         });
         controls.append(ask);
+
+        const dock = document.createElement("button");
+        dock.type = "button";
+        dock.className = "node-button";
+        dock.textContent = state.tabs.includes(node.id) ? "Focused" : "Focus";
+        dock.addEventListener("click", (event) => {
+          event.stopPropagation();
+          dockNode(node.id);
+        });
+        controls.append(dock);
         body.append(controls);
 
         if (node.expanded && node.children?.length) {
@@ -1338,13 +1444,16 @@
         }
 
         element.append(body);
-        if (state.ask === node.id) element.append(renderAsk(node));
         return element;
       }
 
-      function renderAsk(node) {
+      function renderAsk(node, anchor) {
         const popover = document.createElement("div");
         popover.className = "ask-popover";
+        const left = Math.min(window.innerWidth - 292, Math.max(12, anchor.right + 9));
+        const top = Math.min(window.innerHeight - 250, Math.max(12, anchor.top - 8));
+        popover.style.left = `${left}px`;
+        popover.style.top = `${top}px`;
         const answer = state.answers.get(node.id);
         popover.innerHTML = `
           <strong>Ask about ${node.title}</strong>
@@ -1357,15 +1466,69 @@
         popover.addEventListener("pointerdown", (event) => event.stopPropagation());
         popover.querySelector("[data-close]").addEventListener("click", () => {
           state.ask = null;
-          render();
+          renderOverlay();
         });
         popover.querySelector("[data-send]").addEventListener("click", () => {
           const question = popover.querySelector("textarea").value.trim() || `Explain ${node.title} in more depth.`;
           state.answers.set(node.id, `Simulated answer for exact revision 4d48eeeceab3: ${node.summary} A live expansion would gather only the code and project guidance needed for this node. Asked: ${escapeHtml(question)}`);
           status.textContent = `Agent explanation attached to ${node.title}.`;
-          render();
+          renderOverlay();
         });
         return popover;
+      }
+
+      function renderOverlay() {
+        overlay.replaceChildren();
+        if (!state.ask) return;
+        const found = findNode(state.ask);
+        const button = canvas.querySelector(`[data-node-ask="${state.ask}"]`);
+        if (!found || !button) return;
+        overlay.append(renderAsk(found.node, button.getBoundingClientRect()));
+        requestAnimationFrame(() => overlay.querySelector("textarea")?.focus());
+      }
+
+      function renderTabs() {
+        tabs.replaceChildren();
+        tabs.append(createTab("canvas", "Project canvas", false));
+        for (const id of state.tabs) {
+          const node = findNode(id)?.node;
+          if (node) tabs.append(createTab(id, node.title, true));
+        }
+      }
+
+      function createTab(id, label, closeable) {
+        const tab = document.createElement("button");
+        tab.type = "button";
+        tab.className = `workspace-tab${state.activeTab === id ? " active" : ""}`;
+        tab.innerHTML = `<span class="tab-label">${label}</span>${closeable ? '<span class="tab-close" title="Close focused view">x</span>' : ""}`;
+        tab.addEventListener("click", (event) => {
+          if (event.target.closest(".tab-close")) closeTab(id);
+          else activateTab(id);
+        });
+        return tab;
+      }
+
+      function dockNode(id) {
+        if (!state.tabs.includes(id)) state.tabs.push(id);
+        state.activeTab = id;
+        state.selected = id;
+        state.ask = null;
+        viewport.scrollTo({ left: 0, top: 0 });
+        render();
+        status.textContent = `Opened ${findNode(id)?.node.title} as a synchronized focused projection.`;
+      }
+
+      function activateTab(id) {
+        state.activeTab = id;
+        state.ask = null;
+        viewport.scrollTo({ left: 0, top: 0 });
+        render();
+      }
+
+      function closeTab(id) {
+        state.tabs = state.tabs.filter((tab) => tab !== id);
+        if (state.activeTab === id) state.activeTab = "canvas";
+        render();
       }
 
       function drawLinks(svg, siblings, links) {
@@ -1432,7 +1595,7 @@
           node.expanded = !node.expanded;
           if (node.expanded) reflow(node);
           status.textContent = node.expanded
-            ? `Enhanced ${node.title}. Its internal graph is now part of the same canvas.`
+            ? `Enhanced ${node.title}. Nearby nodes were rearranged around its internal graph.`
             : `Collapsed ${node.title}. Its analysis remains indexed.`;
         } else {
           node.detail = Math.min(2, (node.detail || 0) + 1);
@@ -1440,33 +1603,49 @@
             ? `Enhanced ${node.title} to exact code, evidence, revision, and confidence.`
             : `Enhanced ${node.title}. More explanation and source evidence are visible.`;
         }
-        if (parent) reflow(parent);
+        reflowAncestors(parent);
         render();
       }
 
       function reflow(parent) {
-        if (!parent.children) return;
-        let x = 25;
-        let y = 40;
+        if (!parent?.children) return;
+        reflowItems(parent.children, 1180);
+      }
+
+      function reflowRoot() {
+        reflowItems(nodes, 2150);
+      }
+
+      function reflowItems(items, available) {
+        let x = 35;
+        let y = 55;
         let rowHeight = 0;
-        const available = 1040;
-        for (const child of parent.children) {
-          const size = measure(child);
-          if (x > 25 && x + size.width > available) {
-            x = 25;
-            y += rowHeight + 28;
+        for (const item of items) {
+          const size = measure(item);
+          if (x > 35 && x + size.width > available) {
+            x = 35;
+            y += rowHeight + 34;
             rowHeight = 0;
           }
-          child.x = x;
-          child.y = y;
-          x += size.width + 28;
+          item.x = x;
+          item.y = y;
+          x += size.width + 34;
           rowHeight = Math.max(rowHeight, size.height);
-          if (child.expanded) {
-            x = 25;
-            y += rowHeight + 28;
+          if (item.expanded) {
+            x = 35;
+            y += rowHeight + 34;
             rowHeight = 0;
           }
         }
+      }
+
+      function reflowAncestors(parent) {
+        let current = parent;
+        while (current) {
+          reflow(current);
+          current = findNode(current.id)?.parent;
+        }
+        reflowRoot();
       }
 
       function select(id) {
@@ -1525,7 +1704,9 @@
       }
 
       function renderMode() {
-        document.body.className = `${state.mode}-mode`;
+        document.body.classList.toggle("pr-mode", state.mode === "pr");
+        document.body.classList.toggle("head-mode", state.mode === "head");
+        document.body.classList.toggle("fullscreen", state.fullscreen);
         document.querySelectorAll("[data-mode]").forEach((button) => button.classList.toggle("active", button.dataset.mode === state.mode));
         document.querySelector("[data-range]").innerHTML = state.mode === "pr"
           ? `<code>master</code> 4d48eee..HEAD - 6 files, +312 -44`
@@ -1538,6 +1719,8 @@
           node.detail = 0;
         }
         state.ask = null;
+        state.activeTab = "canvas";
+        reflowRoot();
         render();
         status.textContent = "Collapsed every node to the project architecture level.";
       }
@@ -1551,10 +1734,14 @@
         state.zoom = 0.82;
         state.selected = "core";
         state.ask = null;
+        state.activeTab = "canvas";
+        state.tabs = [];
         for (const { node } of walk()) {
           node.expanded = node.id === "core";
           node.detail = 0;
         }
+        reflow(findNode("core").node);
+        reflowRoot();
         render();
         viewport.scrollTo({ top: 0, left: 0, behavior: "smooth" });
         status.textContent = "Restored the initial progressive graph layout.";
@@ -1591,8 +1778,65 @@
 
       document.querySelector('[data-action="collapse"]').addEventListener("click", collapseAll);
       document.querySelector('[data-action="reset"]').addEventListener("click", resetLayout);
+      document.querySelector('[data-action="fullscreen"]').addEventListener("click", () => {
+        state.fullscreen = !state.fullscreen;
+        renderMode();
+        status.textContent = state.fullscreen ? "Full-screen analysis enabled. Press F again to restore the workspace." : "Restored the full project workspace.";
+      });
+
+      viewport.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0 || event.target.closest(".node, button, input, textarea")) return;
+        const start = { x: event.clientX, y: event.clientY, left: viewport.scrollLeft, top: viewport.scrollTop };
+        viewport.classList.add("panning");
+        viewport.setPointerCapture(event.pointerId);
+        const move = (next) => {
+          viewport.scrollLeft = start.left - (next.clientX - start.x);
+          viewport.scrollTop = start.top - (next.clientY - start.y);
+        };
+        const up = () => {
+          viewport.classList.remove("panning");
+          viewport.removeEventListener("pointermove", move);
+          viewport.removeEventListener("pointerup", up);
+          viewport.removeEventListener("pointercancel", up);
+        };
+        viewport.addEventListener("pointermove", move);
+        viewport.addEventListener("pointerup", up);
+        viewport.addEventListener("pointercancel", up);
+      });
+
+      viewport.addEventListener("wheel", (event) => {
+        if (event.target.closest(".code-block, textarea")) return;
+        event.preventDefault();
+        const oldZoom = state.zoom;
+        const direction = event.deltaY < 0 ? 1 : -1;
+        const nextZoom = Math.max(0.4, Math.min(1.35, oldZoom + direction * 0.08));
+        if (nextZoom === oldZoom) return;
+        const rect = viewport.getBoundingClientRect();
+        const cursorX = event.clientX - rect.left;
+        const cursorY = event.clientY - rect.top;
+        const worldX = (viewport.scrollLeft + cursorX) / oldZoom;
+        const worldY = (viewport.scrollTop + cursorY) / oldZoom;
+        state.zoom = nextZoom;
+        canvas.style.setProperty("--zoom", state.zoom);
+        viewport.scrollLeft = worldX * nextZoom - cursorX;
+        viewport.scrollTop = worldY * nextZoom - cursorY;
+        status.textContent = `Canvas zoom: ${Math.round(state.zoom * 100)}%.`;
+      }, { passive: false });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key.toLowerCase() === "f" && !event.target.closest("input, textarea")) {
+          state.fullscreen = !state.fullscreen;
+          renderMode();
+        }
+        if (event.key === "Escape" && state.ask) {
+          state.ask = null;
+          renderOverlay();
+        }
+      });
 
       saveInitialPositions();
+      reflow(findNode("core").node);
+      reflowRoot();
       render();
     </script>
   </body>
