@@ -1,8 +1,8 @@
 # Contract
 
 The project graph artifact, graph state, and graph completion event have
-independent version numbers. All are at version `1`. Consumers refuse unknown
-versions.
+independent version numbers. Artifact and delta are version `1`; state and
+completion are version `2`. Consumers refuse unknown versions.
 
 ## Inputs
 
@@ -114,13 +114,13 @@ direct child of the requested expandable parent. IDs cannot be reused. A parent
 can be expanded once. Aggregate graph and depth limits still apply. Delta
 application and state persistence are atomic.
 
-## Graph state version 1
+## Graph state version 2
 
 `graph-state.json` is bound to the root identity and exact revisions:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "identity": "<sha256>",
   "revision": "<40 hex>",
   "baseRevision": "<40 hex>",
@@ -133,43 +133,52 @@ application and state persistence are atomic.
       "nodeId": "node-id",
       "file": "path.ts",
       "lines": "1-10",
-      "body": "..."
+      "body": "...",
+      "delivery": "draft | queued | active | answered | failed | superseded",
+      "response": "..."
     }
   ],
-  "outcome": "open | approved | changes-requested"
+  "outcome": "open | approved | changes-requested | commented"
 }
 ```
 
-State is capped at 512 KiB, 100 questions, 160 comments, 4 KiB per question or
-comment, and 16 KiB per answer. The `viewed` map remains in version 1 state for
-compatibility, but it is not an approval gate. Transient pan, zoom, tab, code
+State is capped at 512 KiB, 100 retained version 1 questions, 160 comments, 4
+KiB per comment, and 16 KiB per agent response. The `viewed` and `questions`
+fields remain for compatibility, but they are not approval gates or page
+controls. Transient pan, zoom, tab, code
 projection, composer, and node positions stay in the browser.
 
 ## Loopback page
 
 The page listens on `127.0.0.1` at an ephemeral port behind a random 24-byte
-path token. It serves HTML, CSS, JavaScript, and one serialized action route.
+path token. It serves HTML, CSS, JavaScript, a read-only state route, and one
+serialized action route.
 
 Responses use `no-store`, `nosniff`, `no-referrer`, and a CSP that permits only
 same-origin style, script, and connect. Host must be the listening loopback
 address. Origin, when present, must equal that request's exact origin.
 
-Page actions are `enhance`, `add-comment`, `ask`, `code`, `approve`, and
-`request-changes`. Requests are capped at 16 KiB and run
+Page actions are `enhance`, `add-comment`, `send-comment`, `code`, `send-review`,
+`approve`, and `request-changes`. Comments can use a node anchor or an exact line
+inside that node. Saving is immediate. Sending enters one FIFO current-session
+agent queue and returns without waiting. Requests are capped at 16 KiB and run
 one at a time. Every action verifies the exact scope first. Agent-backed and
 terminal actions verify again before mutation or commit. Closing aborts
 in-flight work and fences all later mutation.
 
-Approval is available while the exact graph is open. A terminal action is never
-replaceable.
+`send-review` supersedes active and queued individual comment sends and commits
+neutral feedback immediately. Approval is available while the exact graph is
+open. A terminal action is never replaceable. After any terminal action, the
+page counts down for three seconds, attempts to close its tab, and shows a
+manual-close fallback when browser policy refuses.
 
-## Graph completion version 1
+## Graph completion version 2
 
 The exclusive creation of `completion.json` is the terminal commit boundary.
 Before it, failure leaves the graph open. After it, delivery or cleanup failure
 cannot reopen the decision.
 
-The record contains version, `approved | changes-requested`, scope, repository,
+The record contains version, `approved | changes-requested | commented`, scope,
 refs, exact revisions, identity, node count, node comments, overall comment,
 questions, artifact and state paths, and completion time. Pi emits the same
 record as `quick-review:graph-completed`.
@@ -194,8 +203,8 @@ never discarded.
 - Fields and limits do not change meaning within a version.
 - Unknown fields in graph, delta, state, and action records are rejected.
 - A field or limit change requires its relevant version to change.
-- The Pi event name `quick-review:graph-completed` is stable for graph
-  completion version 1.
+- The Pi event name `quick-review:graph-completed` is stable across graph
+  completion versions. Consumers must inspect the payload version.
 
 ## Environment
 

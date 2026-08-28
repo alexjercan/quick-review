@@ -69,6 +69,23 @@
 - Indent Project structure descendants with one fixed-width guide segment per
   ancestor and a visible branch connector for the direct parent.
 
+## Comment workflow
+
+- Use one Comment composer for node and exact-code-line anchors. Its actions are
+  `Send to agent`, passive `Comment`, and `Cancel`; Ctrl+Enter selects the first.
+- Save comments immediately. Agent delivery is a nonblocking FIFO with one
+  active current-session request and visible draft, queued, active, answered,
+  failed, or superseded state. Do not add parallel agents or review rounds.
+- Add neutral `commented` completion. It supersedes active and queued individual
+  sends, ends the review immediately, and asks the current session agent to
+  triage comments and suggest next steps without editing.
+- Version graph state and completion as version 2 because comment delivery,
+  responses, and the terminal outcome change their formats. Keep artifact and
+  delta at version 1.
+- After neutral feedback, approval, change request, or external close, count
+  down three seconds and attempt to close the browser tab with a visible
+  fallback.
+
 ## Compatibility direction
 
 - Keep graph artifact, state, delta, and completion versions independent. The

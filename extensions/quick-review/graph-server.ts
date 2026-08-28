@@ -3,8 +3,9 @@
 import { randomBytes } from "node:crypto";
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import type { AddressInfo, Socket } from "node:net";
-import { isCommitted, LIMITS } from "./contract.ts";
+import { bounded, isCommitted, LIMITS } from "./contract.ts";
 import type {
+  GraphComment,
   GraphDelta,
   GraphNode,
   GraphState,
@@ -21,7 +22,6 @@ import {
   addGraphComment,
   applyGraphDelta,
   graphApprovable,
-  recordGraphQuestion,
   setGraphViewed,
 } from "./graph-state.ts";
 
@@ -29,13 +29,18 @@ export interface GraphActions {
   verify(signal: AbortSignal): Promise<void>;
   persist(state: GraphState): void;
   expand(node: GraphNode): Promise<GraphDelta>;
-  ask(node: GraphNode, question: string): Promise<string>;
+  comment(
+    node: GraphNode,
+    comment: GraphComment,
+    signal: AbortSignal,
+  ): Promise<string>;
   code(node: GraphNode, signal: AbortSignal): Promise<string>;
   approve(comment: string, signal: AbortSignal): Promise<string | undefined>;
   requestChanges(
     comment: string,
     signal: AbortSignal,
   ): Promise<string | undefined>;
+  sendReview(signal: AbortSignal): Promise<string | undefined>;
 }
 
 export interface GraphServer {
@@ -49,16 +54,17 @@ interface ActionRequest {
   action: string;
   node?: string;
   comment?: string;
+  line?: string;
 }
 const NODE_ACTIONS = [
   "enhance",
-  "ask",
+  "send-comment",
   "code",
   "mark-viewed",
   "reopen-node",
   "add-comment",
 ];
-const GLOBAL_ACTIONS = ["approve", "request-changes"];
+const GLOBAL_ACTIONS = ["approve", "request-changes", "send-review"];
 const HEADERS: Record<string, string> = {
   "Cache-Control": "no-store",
   "X-Content-Type-Options": "nosniff",
@@ -75,10 +81,11 @@ function parseAction(source: string): ActionRequest {
   if (
     typeof request.action !== "string" ||
     Object.keys(request).some(
-      (key) => !["action", "node", "comment"].includes(key),
+      (key) => !["action", "node", "comment", "line"].includes(key),
     ) ||
     (request.node !== undefined && typeof request.node !== "string") ||
-    (request.comment !== undefined && typeof request.comment !== "string")
+    (request.comment !== undefined && typeof request.comment !== "string") ||
+    (request.line !== undefined && typeof request.line !== "string")
   )
     throw new Error("action request is invalid");
   return request as unknown as ActionRequest;
@@ -116,6 +123,14 @@ export async function startGraphServer(
   const token = randomBytes(24).toString("base64url");
   const prefix = `/${token}/`;
   let queue: Promise<unknown> = Promise.resolve();
+  const serialize = <T>(task: () => Promise<T> | T): Promise<T> => {
+    const result = queue.catch(() => undefined).then(task);
+    queue = result;
+    return result;
+  };
+  const commentQueue: string[] = [];
+  let commentWorker = false;
+  let activeComment: AbortController | undefined;
   let terminal = false;
   let closing = false;
   const closer = new AbortController();
@@ -125,6 +140,93 @@ export async function startGraphServer(
     if (closing) throw new Error("the review is closing");
   };
   const data = () => graphPageData(graph, state);
+  const supersedeComments = () => {
+    const previous = state.comments.map(
+      (item) => [item.id, item.delivery] as const,
+    );
+    activeComment?.abort();
+    commentQueue.length = 0;
+    for (const item of state.comments)
+      if (item.delivery === "queued" || item.delivery === "active")
+        item.delivery = "superseded";
+    return previous;
+  };
+  const restoreComments = (
+    previous: ReadonlyArray<readonly [string, GraphComment["delivery"]]>,
+  ) => {
+    for (const [id, delivery] of previous) {
+      const item = state.comments.find((comment) => comment.id === id);
+      if (!item || (delivery !== "queued" && delivery !== "active")) continue;
+      item.delivery = "queued";
+      commentQueue.push(id);
+    }
+    void pumpComments();
+  };
+  const pumpComments = async () => {
+    if (commentWorker) return;
+    commentWorker = true;
+    try {
+      while (!terminal) {
+        const current = await serialize(async () => {
+          const id = commentQueue.shift();
+          const comment = state.comments.find((item) => item.id === id);
+          if (!comment || comment.delivery !== "queued") return undefined;
+          try {
+            await actions.verify(closer.signal);
+          } catch (error) {
+            comment.delivery = "failed";
+            comment.response = bounded(
+              error instanceof Error ? error.message : String(error),
+              LIMITS.answer,
+            );
+            actions.persist(state);
+            return undefined;
+          }
+          comment.delivery = "active";
+          actions.persist(state);
+          return comment;
+        });
+        if (!current) return;
+        const merged = mergeGraph(graph, state.deltas);
+        const node = merged.nodes.find((item) => item.id === current.nodeId);
+        if (!node) continue;
+        const controller = new AbortController();
+        activeComment = controller;
+        try {
+          const response = await actions.comment(
+            node,
+            current,
+            controller.signal,
+          );
+          await serialize(async () => {
+            if (terminal || current.delivery !== "active") return;
+            await actions.verify(closer.signal);
+            current.response = bounded(response.trim(), LIMITS.answer);
+            current.delivery = current.response ? "answered" : "failed";
+            actions.persist(state);
+          });
+        } catch (error) {
+          await serialize(() => {
+            if (terminal || current.delivery !== "active") return;
+            current.delivery = controller.signal.aborted
+              ? "superseded"
+              : "failed";
+            current.response = controller.signal.aborted
+              ? ""
+              : error instanceof Error
+                ? bounded(error.message, LIMITS.answer)
+                : "The session agent could not answer.";
+            actions.persist(state);
+          });
+        } finally {
+          if (activeComment === controller) activeComment = undefined;
+        }
+      }
+    } finally {
+      commentWorker = false;
+      if (!terminal && commentQueue.length) void pumpComments();
+    }
+  };
 
   const execute = async (
     request: ActionRequest,
@@ -159,15 +261,27 @@ export async function startGraphServer(
             : "Node reopened.",
       };
     }
-    if (request.action === "add-comment") {
-      const added = addGraphComment(graph, state, node!.id, comment);
+    if (request.action === "add-comment" || request.action === "send-comment") {
+      const queued = request.action === "send-comment";
+      const added = addGraphComment(graph, state, node!.id, comment, {
+        line: request.line,
+        delivery: queued ? "queued" : "draft",
+      });
       try {
         actions.persist(state);
       } catch (error) {
         state.comments = state.comments.filter((item) => item.id !== added.id);
         throw error;
       }
-      return { message: "Graph comment recorded." };
+      if (queued) {
+        commentQueue.push(added.id);
+        void pumpComments();
+      }
+      return {
+        message: queued
+          ? "Comment queued for the session agent."
+          : "Review comment recorded.",
+      };
     }
     if (request.action === "enhance") {
       if (!node!.expandable) throw new Error("this node cannot be enhanced");
@@ -187,32 +301,42 @@ export async function startGraphServer(
       }
       return { message: `Enhanced ${node!.title}.` };
     }
-    if (request.action === "ask") {
-      if (!comment) throw new Error("a question needs text");
-      const answer = await actions.ask(node!, comment);
-      if (!answer.trim())
-        throw new Error("the session agent returned no answer");
-      assertOpen();
-      await actions.verify(closer.signal);
-      assertOpen();
-      recordGraphQuestion(state, node!.id, comment, answer);
-      try {
-        actions.persist(state);
-      } catch (error) {
-        state.questions.pop();
-        throw error;
-      }
-      return { message: "The session agent answered." };
-    }
     if (request.action === "code") {
       const code = await actions.code(node!, closer.signal);
       return { message: "Exact code loaded.", code };
+    }
+    if (request.action === "send-review") {
+      await actions.verify(closer.signal);
+      assertOpen();
+      const previousComments = supersedeComments();
+      state.outcome = "commented";
+      let warning: string | undefined;
+      try {
+        actions.persist(state);
+        warning = await actions.sendReview(closer.signal);
+      } catch (error) {
+        if (isCommitted(error)) {
+          terminal = true;
+          throw error;
+        }
+        state.outcome = "open";
+        restoreComments(previousComments);
+        try {
+          actions.persist(state);
+        } catch {}
+        throw error;
+      }
+      terminal = true;
+      return {
+        message: `Review feedback sent.${warning ? ` ${warning}` : ""}`,
+      };
     }
     if (request.action === "approve") {
       if (!graphApprovable(graph, state))
         throw new Error("view every visible graph claim before approval");
       await actions.verify(closer.signal);
       assertOpen();
+      const previousComments = supersedeComments();
       state.outcome = "approved";
       let warning: string | undefined;
       try {
@@ -224,6 +348,7 @@ export async function startGraphServer(
           throw error;
         }
         state.outcome = "open";
+        restoreComments(previousComments);
         try {
           actions.persist(state);
         } catch {}
@@ -238,6 +363,7 @@ export async function startGraphServer(
       throw new Error("Request changes needs an overall explanation");
     await actions.verify(closer.signal);
     assertOpen();
+    const previousComments = supersedeComments();
     state.outcome = "changes-requested";
     let warning: string | undefined;
     try {
@@ -248,6 +374,7 @@ export async function startGraphServer(
         throw error;
       }
       state.outcome = "open";
+      restoreComments(previousComments);
       throw error;
     }
     terminal = true;
@@ -281,6 +408,7 @@ export async function startGraphServer(
     if (request.method === "GET") {
       if (path === prefix)
         send(200, renderGraphPage(graph, state), "text/html; charset=utf-8");
+      else if (path === `${prefix}state`) json(200, { ok: true, data: data() });
       else if (path === `${prefix}style.css`)
         send(200, GRAPH_PAGE_CSS, "text/css; charset=utf-8");
       else if (path === `${prefix}app.js`)
@@ -329,6 +457,7 @@ export async function startGraphServer(
     finished,
     close: async () => {
       closing = true;
+      activeComment?.abort();
       closer.abort();
       server.close();
       server.closeIdleConnections?.();

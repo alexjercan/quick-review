@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createGraphQueueHost } from "../extensions/quick-review/graph-host.ts";
 import type {
+  GraphComment,
   GraphDelta,
   GraphNode,
 } from "../extensions/quick-review/graph-contract.ts";
@@ -33,7 +34,7 @@ const delta: GraphDelta = {
   edges: [],
 };
 
-test("graph host queues enhancement and question responses", async () => {
+test("graph host queues enhancement and comment responses", async () => {
   let id = 0;
   const host = createGraphQueueHost({
     id: () => String(++id).padStart(24, "0"),
@@ -50,27 +51,53 @@ test("graph host queues enhancement and question responses", async () => {
   );
   assert.deepEqual(await expanding, delta);
 
-  const asking = host.ask({ node, question: "Why?" });
-  const question = await host.next();
-  assert.equal(question?.kind, "question");
+  const comment: GraphComment = {
+    id: "b".repeat(24),
+    nodeId: "core",
+    file: "src/core.ts",
+    lines: "3",
+    body: "Why?",
+    delivery: "active",
+    response: "",
+  };
+  const responding = host.comment({
+    node,
+    comment,
+    signal: new AbortController().signal,
+  });
+  const event = await host.next();
+  assert.equal(event?.kind, "comment");
   assert.equal(
-    host.answer(
-      question!.kind === "question" ? question!.requestId : "",
+    host.respondToComment(
+      event!.kind === "comment" ? event!.requestId : "",
       "Because.",
     ),
     true,
   );
-  assert.equal(await asking, "Because.");
+  assert.equal(await responding, "Because.");
 });
 
 test("a cancelled graph wait leaves its event queued", async () => {
   const host = createGraphQueueHost({ id: () => "a".repeat(24) });
   const controller = new AbortController();
   controller.abort();
-  const asking = host.ask({ node, question: "Still there?" });
+  const comment: GraphComment = {
+    id: "b".repeat(24),
+    nodeId: "core",
+    file: "src/core.ts",
+    lines: "3",
+    body: "Still there?",
+    delivery: "active",
+    response: "",
+  };
+  const responding = host.comment({
+    node,
+    comment,
+    signal: new AbortController().signal,
+  });
   assert.equal(await host.next({ signal: controller.signal }), undefined);
   const event = await host.next();
-  assert.equal(event?.kind, "question");
+  assert.equal(event?.kind, "comment");
   host.fail("closed");
-  await assert.rejects(asking, /closed/);
+  await assert.rejects(responding, /closed/);
 });

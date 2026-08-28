@@ -19,6 +19,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   questions, comments, minimap navigation, pan, zoom, and draggable graph nodes.
 - Add independently versioned graph artifacts, atomic expansion deltas, graph
   state, and graph completion events for Pi and Claude Code.
+- Add exact-line review comments, nonblocking single-agent comment delivery, and
+  a neutral `commented` completion with agent triage and suggested next steps.
 
 ### Changed
 
@@ -29,8 +31,11 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   viewed-state approval gate, show enhancement progress, and render collapsible
   highlighted code projections linked to their source nodes.
 - Add an edge-ranked hierarchy layout, an automatically rebased infinite-feeling
-  canvas, a grid that follows panning, and Ctrl+Enter submission for inline Ask
-  and Comment forms.
+  canvas, a grid that follows panning, and Ctrl+Enter submission for inline
+  comments.
+- Replace blocking Ask with one comment composer offering `Send to agent`,
+  `Comment`, and `Cancel`. Terminal actions supersede queued comment sends and
+  close the page after a three-second countdown.
 
 ### Packaging
 

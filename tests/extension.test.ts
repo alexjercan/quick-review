@@ -80,7 +80,7 @@ test("plain quick-review defaults to the committed HEAD graph", async () => {
     assert.match(request.content, /quick_review_graph_submit/);
     assert.ok(base.pi.activeTools.includes("quick_review_graph_submit"));
     assert.ok(base.pi.activeTools.includes("quick_review_graph_expand"));
-    assert.ok(base.pi.activeTools.includes("quick_review_answer"));
+    assert.ok(base.pi.activeTools.includes("quick_review_comment_respond"));
     await assert.rejects(
       base.pi.call("quick_review_submit", {}),
       /no tool named/,
@@ -113,7 +113,7 @@ test("help and non-page modes describe the graph command", async () => {
   }
 });
 
-test("the Pi session enhances, answers, and approves a diff graph", async () => {
+test("the Pi session enhances, responds to comments, and approves", async () => {
   const base = start();
   try {
     const review = await open(
@@ -131,19 +131,30 @@ test("the Pi session enhances, answers, and approves a diff graph", async () => 
     });
     assert.equal((await enhancing).payload.data.nodes.length, 2);
 
-    const asking = review.act({
-      action: "ask",
-      node: "greeting.format",
-      comment: "Why interpolate?",
-    });
-    const question = await waitFor(() =>
-      base.pi.sent.find((item) => item.customType === "quick-review-question"),
+    assert.equal(
+      (
+        await review.act({
+          action: "send-comment",
+          node: "greeting.format",
+          line: "2",
+          comment: "Why interpolate?",
+        })
+      ).status,
+      200,
     );
-    await base.pi.call("quick_review_answer", {
-      questionId: String(question.details?.questionId),
-      answer: "It formats the supplied name.",
+    const comment = await waitFor(() =>
+      base.pi.sent.find((item) => item.customType === "quick-review-comment"),
+    );
+    await base.pi.call("quick_review_comment_respond", {
+      commentId: String(comment.details?.commentId),
+      response: "It formats the supplied name.",
     });
-    assert.equal((await asking).status, 200);
+    for (let count = 0; count < 100; count++) {
+      const state = (await (await fetch(new URL("state", review.url))).json())
+        .data.state;
+      if (state.comments[0]?.delivery === "answered") break;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
 
     await review.act({ action: "mark-viewed", node: "greeting" });
     await review.act({ action: "mark-viewed", node: "greeting.format" });
@@ -179,6 +190,34 @@ test("a target without a base binds one committed snapshot", async () => {
       (base.pi.emitted.at(-1)?.payload as { scope: string }).scope,
       "head",
     );
+  } finally {
+    await base.pi.fire("session_shutdown");
+    base.cleanup();
+  }
+});
+
+test("neutral review asks the current agent for triage without edits", async () => {
+  const base = start();
+  try {
+    const review = await open(base, "--no-open");
+    await review.act({
+      action: "add-comment",
+      node: "greeting",
+      line: "2",
+      comment: "This may need a fallback.",
+    });
+    assert.equal((await review.act({ action: "send-review" })).status, 200);
+    const event = base.pi.emitted.at(-1)?.payload as {
+      version: number;
+      outcome: string;
+    };
+    assert.equal(event.version, 2);
+    assert.equal(event.outcome, "commented");
+    const outcome = base.pi.sent.find(
+      (item) => item.customType === "quick-review-graph-outcome",
+    );
+    assert.match(outcome?.content ?? "", /concise triage summary/);
+    assert.match(outcome?.content ?? "", /Do not edit files/);
   } finally {
     await base.pi.fire("session_shutdown");
     base.cleanup();
@@ -225,25 +264,34 @@ test("close removes a pending plan and closes an open page", async () => {
   }
 });
 
-test("plain assistant text can answer the graph question segment", async () => {
+test("plain assistant text can respond to the active comment", async () => {
   const base = start();
   try {
     const review = await open(base);
-    const asking = review.act({
-      action: "ask",
+    await review.act({
+      action: "send-comment",
       node: "greeting",
+      line: "1",
       comment: "Why?",
     });
     await waitFor(() =>
-      base.pi.sent.find((item) => item.customType === "quick-review-question"),
+      base.pi.sent.find((item) => item.customType === "quick-review-comment"),
     );
-    base.pi.deliver("quick-review-question");
+    base.pi.deliver("quick-review-comment");
     base.pi.assistant("The exact code supplies the behavior.");
     await base.pi.fire("agent_settled");
-    assert.equal(
-      (await asking).payload.data.state.questions[0].answer,
-      "The exact code supplies the behavior.",
-    );
+    for (let count = 0; count < 100; count++) {
+      const state = (await (await fetch(new URL("state", review.url))).json())
+        .data.state;
+      if (state.comments[0]?.delivery === "answered") {
+        assert.equal(
+          state.comments[0].response,
+          "The exact code supplies the behavior.",
+        );
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
   } finally {
     await base.pi.fire("session_shutdown");
     base.cleanup();

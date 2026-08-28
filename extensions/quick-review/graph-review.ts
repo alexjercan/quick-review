@@ -7,6 +7,7 @@ import type { GraphPlan } from "./analysis.ts";
 import { verifyAnalysis } from "./analysis.ts";
 import {
   GRAPH_COMPLETION_VERSION,
+  type GraphComment,
   type GraphCompletionEvent,
   type GraphDelta,
   type GraphNode,
@@ -19,7 +20,11 @@ import { initialGraphState, saveGraphState } from "./graph-state.ts";
 import * as git from "./git.ts";
 
 export interface GraphHost {
-  ask(request: { node: GraphNode; question: string }): Promise<string>;
+  comment(request: {
+    node: GraphNode;
+    comment: GraphComment;
+    signal: AbortSignal;
+  }): Promise<string>;
   expand(request: { node: GraphNode; knownIds: string[] }): Promise<GraphDelta>;
   complete(event: GraphCompletionEvent, warning?: string): Promise<void> | void;
 }
@@ -40,7 +45,7 @@ function completion(
   plan: GraphPlan,
   graph: ProjectGraph,
   state: GraphState,
-  outcome: "approved" | "changes-requested",
+  outcome: "approved" | "changes-requested" | "commented",
   overallComment: string,
   completedAt: string,
 ): GraphCompletionEvent {
@@ -109,7 +114,7 @@ async function exactCode(
   const lines = content
     .split("\n")
     .slice(Math.max(0, start - 1), Math.min(end, start - 1 + 400));
-  return `${evidence.file}:${evidence.lines} at ${plan.inputs.revision}\n${"-".repeat(60)}\n${lines.join("\n")}`;
+  return lines.join("\n");
 }
 
 export async function openGraphReview(
@@ -133,7 +138,7 @@ export async function openGraphReview(
   }
 
   const finalize = async (
-    outcome: "approved" | "changes-requested",
+    outcome: "approved" | "changes-requested" | "commented",
     comment: string,
   ): Promise<string | undefined> => {
     const event = completion(plan, graph, state, outcome, comment, now());
@@ -183,10 +188,12 @@ export async function openGraphReview(
             (node) => node.id,
           ),
         }),
-      ask: (node, question) => host.ask({ node, question }),
+      comment: (node, comment, signal) =>
+        host.comment({ node, comment, signal }),
       code: (node, signal) => exactCode(plan, node, signal),
       approve: (comment) => finalize("approved", comment),
       requestChanges: (comment) => finalize("changes-requested", comment),
+      sendReview: () => finalize("commented", ""),
     });
   } catch (error) {
     discardGraphPlan(plan, true);

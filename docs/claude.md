@@ -37,26 +37,26 @@ until the page produces an event, and answers what it gets:
 ```
 quick_review_start         ->  instructions for an exact graph scope
 quick_review_graph_submit  ->  the project decompiler opens
-quick_review_wait          ->  enhancement, question, or outcome
-quick_review_graph_expand  ->  an enhanced subtree reaches the page
-quick_review_answer        ->  a node question unblocks
+quick_review_wait             ->  enhancement, comment, or outcome
+quick_review_graph_expand     ->  an enhanced subtree reaches the page
+quick_review_comment_respond  ->  the active comment receives a response
 ```
 
 `extensions/quick-review/host.ts` and `graph-host.ts` are the queues behind
 that. They hold what the page produced and hand over one event per wait.
 
 **The reviewer can only reach the agent while the agent is waiting.** An agent
-that stops looping leaves `Explain` and `Ask agent` hanging until the question
+that stops looping leaves sent comments queued until the comment
 times out after fifteen minutes. The command and the server instructions both
 say to keep waiting; that is the whole contract.
 
 ## What the timeouts are for
 
-| Bound                                  | Value      | Why                                         |
-| -------------------------------------- | ---------- | ------------------------------------------- |
-| One `quick_review_wait`                | 5 minutes  | Reports nothing and asks to be called again |
-| One unanswered question or enhancement | 15 minutes | The page stops waiting on the agent         |
-| Inlined patch in `start`               | 24 KiB     | Above it the agent reads `patch.diff`       |
+| Bound                                 | Value      | Why                                         |
+| ------------------------------------- | ---------- | ------------------------------------------- |
+| One `quick_review_wait`               | 5 minutes  | Reports nothing and asks to be called again |
+| One unanswered comment or enhancement | 15 minutes | The page records a failed response          |
+| Inlined patch in `start`              | 24 KiB     | Above it the agent reads `patch.diff`       |
 
 A host warns above ten thousand tokens of tool output and truncates well before
 a large patch fits, so `start` stops inlining early and points at the patch file
@@ -64,11 +64,11 @@ instead.
 
 A host may also move a tool call that runs past two minutes into a background
 task. That is fine and wanted: the wait stops holding the session, the user
-keeps their prompt, and the reviewer's question arrives as a notification.
+keeps their prompt, and the reviewer's comment arrives as a notification.
 
 Nothing is lost when a wait ends empty or is cancelled. Events leave the queue
 only when they are handed to a live waiter, so pressing escape during a wait
-leaves the reviewer's question exactly where it was.
+leaves the reviewer's comment exactly where it was.
 
 ## No MCP library
 
@@ -102,6 +102,7 @@ contract may change. `ReviewHost` is where that would plug in when it settles.
 - Nothing writes to stdout except JSON-RPC. A stray `console.log` breaks the
   connection.
 - Tools stay registered for the whole session. There is no equivalent of Pi's
-  `setActiveTools`, so `quick_review_answer` exists even with no review open. It
+  `setActiveTools`, so `quick_review_comment_respond` exists even with no review
+  open. It
   refuses, as it does in Pi.
 - One review at a time per server, as in Pi.

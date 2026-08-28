@@ -3,6 +3,7 @@
 import { randomBytes } from "node:crypto";
 import { bounded, LIMITS } from "./contract.ts";
 import type {
+  GraphComment,
   GraphCompletionEvent,
   GraphDelta,
   GraphNode,
@@ -10,7 +11,12 @@ import type {
 import type { GraphHost } from "./graph-review.ts";
 
 export type GraphHostEvent =
-  | { kind: "question"; requestId: string; node: GraphNode; question: string }
+  | {
+      kind: "comment";
+      requestId: string;
+      node: GraphNode;
+      comment: GraphComment;
+    }
   | {
       kind: "expansion";
       requestId: string;
@@ -24,7 +30,7 @@ export interface GraphQueueHost extends GraphHost {
     timeout?: number;
     signal?: AbortSignal;
   }): Promise<GraphHostEvent | undefined>;
-  answer(requestId: string, answer: string): boolean;
+  respondToComment(requestId: string, response: string): boolean;
   submitExpansion(requestId: string, delta: GraphDelta): boolean;
   fail(reason: string): void;
 }
@@ -36,7 +42,7 @@ export function createGraphQueueHost(
   const identify = options.id ?? (() => randomBytes(12).toString("hex"));
   const queue: GraphHostEvent[] = [];
   const waiters: Array<(event: GraphHostEvent | undefined) => void> = [];
-  const questions = new Map<
+  const comments = new Map<
     string,
     { resolve(value: string): void; reject(error: Error): void }
   >();
@@ -75,14 +81,29 @@ export function createGraphQueueHost(
       push(event);
     });
   return {
-    ask: ({ node, question }) => {
+    comment: ({ node, comment, signal }) => {
       const requestId = identify();
-      return pending(questions, requestId, {
-        kind: "question",
+      const result = pending(comments, requestId, {
+        kind: "comment",
         requestId,
         node,
-        question,
+        comment,
       });
+      const abort = () => {
+        const request = comments.get(requestId);
+        if (!request) return;
+        queue.splice(
+          0,
+          queue.length,
+          ...queue.filter(
+            (event) =>
+              event.kind !== "comment" || event.requestId !== requestId,
+          ),
+        );
+        request.reject(new Error("the comment was superseded"));
+      };
+      signal.addEventListener("abort", abort, { once: true });
+      return result.finally(() => signal.removeEventListener("abort", abort));
     },
     expand: ({ node, knownIds }) => {
       const requestId = identify();
@@ -118,10 +139,10 @@ export function createGraphQueueHost(
         waiters.push(give);
       });
     },
-    answer: (id, answer) => {
-      const request = questions.get(id);
+    respondToComment: (id, response) => {
+      const request = comments.get(id);
       if (!request) return false;
-      request.resolve(bounded(answer, LIMITS.answer));
+      request.resolve(bounded(response, LIMITS.answer));
       return true;
     },
     submitExpansion: (requestId, delta) => {
@@ -132,11 +153,11 @@ export function createGraphQueueHost(
     },
     fail: (reason) => {
       queue.length = 0;
-      for (const request of questions.values())
+      for (const request of comments.values())
         request.reject(new Error(reason));
       for (const request of expansions.values())
         request.reject(new Error(reason));
-      questions.clear();
+      comments.clear();
       expansions.clear();
       while (waiters.length) waiters.shift()!(undefined);
     },

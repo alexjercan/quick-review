@@ -9,7 +9,7 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs";
-import { bounded, LIMITS, RECORD_ID } from "./contract.ts";
+import { bounded, LIMITS, LINE_RANGE, RECORD_ID } from "./contract.ts";
 import {
   GRAPH_LIMITS,
   GRAPH_STATE_VERSION,
@@ -76,7 +76,9 @@ export function validateGraphState(
     state.identity !== graph.identity ||
     state.revision !== graph.revision ||
     state.baseRevision !== graph.baseRevision ||
-    !["open", "approved", "changes-requested"].includes(state.outcome) ||
+    !["open", "approved", "changes-requested", "commented"].includes(
+      state.outcome,
+    ) ||
     !Array.isArray(state.deltas) ||
     !state.viewed ||
     typeof state.viewed !== "object" ||
@@ -112,12 +114,31 @@ export function validateGraphState(
       state.comments.length ||
     state.comments.some(
       (item) =>
-        !exactKeys(item, ["id", "nodeId", "file", "lines", "body"]) ||
+        !exactKeys(item, [
+          "id",
+          "nodeId",
+          "file",
+          "lines",
+          "body",
+          "delivery",
+          "response",
+        ]) ||
         !RECORD_ID.test(item.id) ||
         !ids.includes(item.nodeId) ||
         typeof item.file !== "string" ||
         typeof item.lines !== "string" ||
-        !validText(item.body, LIMITS.comment),
+        !LINE_RANGE.test(item.lines) ||
+        !validText(item.body, LIMITS.comment) ||
+        ![
+          "draft",
+          "queued",
+          "active",
+          "answered",
+          "failed",
+          "superseded",
+        ].includes(item.delivery) ||
+        typeof item.response !== "string" ||
+        Buffer.byteLength(item.response, "utf8") > LIMITS.answer,
     )
   )
     throw new Error("graph comments are invalid");
@@ -160,6 +181,7 @@ export function addGraphComment(
   state: GraphState,
   nodeId: string,
   body: string,
+  options: { line?: string; delivery?: "draft" | "queued" } = {},
 ): GraphComment {
   const { nodes } = mergeGraph(graph, state.deltas);
   const node = nodes.find((item) => item.id === nodeId);
@@ -168,12 +190,23 @@ export function addGraphComment(
   if (state.comments.length >= GRAPH_LIMITS.nodes)
     throw new Error("graph comments exceed the review limit");
   const evidence = node.evidence[0];
+  const location = node.lines ?? evidence?.lines ?? "";
+  const line = options.line;
+  if (line !== undefined) {
+    if (!/^\d+$/.test(line)) throw new Error("comment line is invalid");
+    const [startText, endText] = location.split("-");
+    const value = Number(line);
+    if (value < Number(startText) || value > Number(endText ?? startText))
+      throw new Error("comment line is outside the graph node");
+  }
   const comment: GraphComment = {
     id: randomBytes(12).toString("hex"),
     nodeId,
     file: node.file ?? evidence?.file ?? "",
-    lines: node.lines ?? evidence?.lines ?? "",
+    lines: line ?? location,
     body: bounded(body.trim(), LIMITS.comment),
+    delivery: options.delivery ?? "draft",
+    response: "",
   };
   state.comments.push(comment);
   return comment;

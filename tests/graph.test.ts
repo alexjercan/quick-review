@@ -120,6 +120,10 @@ test("project graph and direct-child deltas are bounded and exact", () => {
   assert.equal(state.viewed["greeting.format"], false);
   assert.deepEqual(validateGraphState(graph, state), state);
   assert.throws(
+    () => validateGraphState(graph, { ...state, version: 1 }),
+    /does not match/,
+  );
+  assert.throws(
     () => applyGraphDelta(graph, state, expansion),
     /already enhanced/,
   );
@@ -174,9 +178,12 @@ test("graph page keeps hostile graph text inside encoded data", () => {
   assert.doesNotMatch(page, /<img src=x|<script>alert/);
   assert.match(page, /&lt;img src=x/);
   assert.doesNotMatch(page, /data-ask/);
-  assert.doesNotMatch(GRAPH_PAGE_JS, /Mark viewed|prompt\(/);
+  assert.doesNotMatch(GRAPH_PAGE_JS, /Mark viewed|prompt\(|data-action="ask"/);
   assert.match(GRAPH_PAGE_JS, /inline-composer/);
   assert.match(GRAPH_PAGE_JS, /code-node/);
+  assert.match(GRAPH_PAGE_JS, /data-code-line/);
+  assert.match(GRAPH_PAGE_JS, /Send to agent/);
+  assert.match(GRAPH_PAGE_JS, /function closeSoon/);
   assert.match(GRAPH_PAGE_JS, /e\.target\.closest\('\.node,button/);
   assert.match(GRAPH_PAGE_JS, /WORLD=100000/);
   assert.match(GRAPH_PAGE_JS, /function arrangeRoots/);
@@ -220,25 +227,88 @@ test("HEAD and diff analysis plans bind committed objects", async () => {
   }
 });
 
-test("graph server enhances, persists, asks, and commits", async () => {
+test("neutral review supersedes active and queued comments", async () => {
+  const revision = "a".repeat(40);
+  const graph = parseProjectGraph(source(revision, "b".repeat(40)));
+  const state = initialGraphState(graph);
+  let completed = false;
+  const server = await startGraphServer(graph, state, {
+    verify: async () => {},
+    persist: () => {},
+    expand: async () => parseGraphDelta(delta(revision), revision),
+    comment: async (_node, _comment, signal) =>
+      await new Promise<string>((_resolve, reject) =>
+        signal.addEventListener(
+          "abort",
+          () => reject(new Error("superseded")),
+          { once: true },
+        ),
+      ),
+    code: async () => "exact code",
+    approve: async () => undefined,
+    requestChanges: async () => undefined,
+    sendReview: async () => {
+      completed = true;
+      return undefined;
+    },
+  });
+  const act = async (body: object) => {
+    const response = await fetch(new URL("action", server.url), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return { status: response.status, payload: (await response.json()) as any };
+  };
+  try {
+    await act({
+      action: "send-comment",
+      node: "greeting",
+      line: "1",
+      comment: "First",
+    });
+    await act({
+      action: "send-comment",
+      node: "greeting",
+      line: "2",
+      comment: "Second",
+    });
+    for (let count = 0; count < 20; count++) {
+      if (state.comments.some((item) => item.delivery === "active")) break;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    const result = await act({ action: "send-review" });
+    assert.equal(result.status, 200);
+    assert.equal(completed, true);
+    assert.deepEqual(
+      state.comments.map((item) => item.delivery),
+      ["superseded", "superseded"],
+    );
+  } finally {
+    await server.close();
+  }
+});
+
+test("graph server queues anchored comments and sends neutral review", async () => {
   const revision = "a".repeat(40);
   const graph: ProjectGraph = parseProjectGraph(
     source(revision, "b".repeat(40)),
   );
   const state = initialGraphState(graph);
   let persisted = 0;
-  let approved = false;
+  let commented = false;
   const server = await startGraphServer(graph, state, {
     verify: async () => {},
     persist: () => void persisted++,
     expand: async () => parseGraphDelta(delta(revision), revision),
-    ask: async () => "The caller supplies the name.",
+    comment: async () => "The caller supplies the name.",
     code: async () => "exact code",
-    approve: async () => {
-      approved = true;
+    approve: async () => undefined,
+    requestChanges: async () => undefined,
+    sendReview: async () => {
+      commented = true;
       return undefined;
     },
-    requestChanges: async () => undefined,
   });
   const act = async (body: object) => {
     const response = await fetch(new URL("action", server.url), {
@@ -254,19 +324,35 @@ test("graph server enhances, persists, asks, and commits", async () => {
     const enhanced = await act({ action: "enhance", node: "greeting" });
     assert.equal(enhanced.status, 200);
     assert.equal(enhanced.payload.data.nodes.length, 2);
-    const asked = await act({
-      action: "ask",
+    assert.equal(
+      (
+        await act({
+          action: "send-comment",
+          node: "greeting.format",
+          line: "9",
+          comment: "Outside",
+        })
+      ).status,
+      400,
+    );
+    const queued = await act({
+      action: "send-comment",
       node: "greeting.format",
+      line: "2",
       comment: "Why?",
     });
-    assert.equal(
-      asked.payload.data.state.questions[0].answer,
-      "The caller supplies the name.",
-    );
-    const result = await act({ action: "approve", comment: "Looks right." });
+    assert.equal(queued.status, 200);
+    assert.equal(queued.payload.data.state.comments[0].lines, "2");
+    for (let count = 0; count < 20; count++) {
+      if (state.comments[0]?.delivery === "answered") break;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assert.equal(state.comments[0]?.response, "The caller supplies the name.");
+    const result = await act({ action: "send-review" });
     assert.equal(result.status, 200);
-    assert.equal(approved, true);
-    assert.ok(persisted >= 3);
+    assert.equal(commented, true);
+    assert.equal(result.payload.data.state.outcome, "commented");
+    assert.ok(persisted >= 4);
   } finally {
     await server.close();
   }

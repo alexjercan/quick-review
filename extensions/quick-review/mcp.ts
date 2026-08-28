@@ -15,9 +15,9 @@ import {
 import { createGraphQueueHost, type GraphQueueHost } from "./graph-host.ts";
 import {
   buildExpansionPrompt,
+  buildGraphCommentPrompt,
   buildGraphCompletionMessage,
   buildGraphPrompt,
-  buildGraphQuestionPrompt,
 } from "./graph-prompt.ts";
 import {
   discardGraphPlan,
@@ -47,8 +47,8 @@ const INSTRUCTIONS = `Quick Review opens a progressive exact-revision project gr
 Run it as a loop and do not stop early:
 1. quick_review_start returns exact HEAD or diff graph instructions. Follow them.
 2. quick_review_graph_submit opens the project decompiler.
-3. quick_review_wait blocks until the reviewer asks for an enhancement, asks a
-   question, or decides. Use quick_review_graph_expand or quick_review_answer,
+3. quick_review_wait blocks until the reviewer asks for an enhancement, sends a
+   comment, or decides. Use quick_review_graph_expand or quick_review_comment_respond,
    then call quick_review_wait again. Repeat until the outcome arrives.
 
 The reviewer cannot reach you except through quick_review_wait. Do not edit files
@@ -130,7 +130,7 @@ const TOOLS = [
   {
     name: "quick_review_wait",
     description:
-      "Wait for a graph enhancement, graph question, or terminal outcome. Keep calling until the outcome arrives.",
+      "Wait for a graph enhancement, review comment, or terminal outcome. Keep calling until the outcome arrives.",
     inputSchema: {
       type: "object",
       properties: {},
@@ -138,20 +138,20 @@ const TOOLS = [
     },
   },
   {
-    name: "quick_review_answer",
+    name: "quick_review_comment_respond",
     description:
-      "Answer one open graph question. Only use a questionId returned by quick_review_wait.",
+      "Respond to the active review comment. Only use a commentId returned by quick_review_wait.",
     inputSchema: {
       type: "object",
       properties: {
-        questionId: { type: "string", pattern: "^[0-9a-f]{24}$" },
-        answer: {
+        commentId: { type: "string", pattern: "^[0-9a-f]{24}$" },
+        response: {
           type: "string",
           minLength: 1,
           maxLength: LIMITS.answer,
         },
       },
-      required: ["questionId", "answer"],
+      required: ["commentId", "response"],
       additionalProperties: false,
     },
   },
@@ -386,12 +386,11 @@ export function createQuickReviewMcp(options: McpOptions = {}): QuickReviewMcp {
           ? "No Quick Review event yet. The project graph is still open. Call quick_review_wait again."
           : "The Quick Review page was closed without a decision. Stop waiting.",
       );
-    if (event.kind === "question")
+    if (event.kind === "comment")
       return text(
-        buildGraphQuestionPrompt({
-          id: event.requestId,
+        buildGraphCommentPrompt({
+          comment: event.comment,
           node: event.node,
-          question: event.question,
           revision: review.plan.inputs.revision,
         }),
       );
@@ -409,13 +408,15 @@ export function createQuickReviewMcp(options: McpOptions = {}): QuickReviewMcp {
     );
   };
 
-  const answer = async (params: unknown) => {
+  const respondToComment = async (params: unknown) => {
     const source = fields(params);
-    const questionId = requiredText(source, "questionId", 24);
-    const body = requiredText(source, "answer", LIMITS.answer);
-    if (!host?.answer(questionId, body))
-      throw new Error("that Quick Review question is no longer open");
-    return text("The reviewer has the answer. Call quick_review_wait again.");
+    const commentId = requiredText(source, "commentId", 24);
+    const body = requiredText(source, "response", LIMITS.answer);
+    if (!host?.respondToComment(commentId, body))
+      throw new Error("that Quick Review comment is no longer active");
+    return text(
+      "The reviewer has the comment response. Call quick_review_wait again.",
+    );
   };
 
   const close = async (params: unknown) => {
@@ -442,8 +443,8 @@ export function createQuickReviewMcp(options: McpOptions = {}): QuickReviewMcp {
           return await submitExpansion(source.arguments);
         case "quick_review_wait":
           return await wait(source.arguments, signal);
-        case "quick_review_answer":
-          return await answer(source.arguments);
+        case "quick_review_comment_respond":
+          return await respondToComment(source.arguments);
         case "quick_review_close":
           return await close(source.arguments);
         default:

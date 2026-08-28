@@ -128,7 +128,7 @@ const delta = JSON.stringify({
 
 const completions = [];
 const review = await openGraphReview(plan, parseProjectGraph(artifact), {
-  ask: async () => "The caller must pass a name.",
+  comment: async () => "The caller must pass a name.",
   expand: async () => parseGraphDelta(delta, plan.inputs.revision),
   complete: (event) => void completions.push(event),
 });
@@ -149,10 +149,19 @@ assert.match(first, /project decompiler/);
 assert.match(first, /data-payload=/);
 await act({ action: "enhance", node: "greeting" });
 await act({
-  action: "ask",
+  action: "send-comment",
   node: "greeting.format",
+  line: "2",
   comment: "Does the caller supply a name?",
 });
+for (let count = 0; count < 100; count++) {
+  if (review.state.comments[0]?.delivery === "answered") break;
+  await new Promise((resolve) => setTimeout(resolve, 5));
+}
+assert.equal(
+  review.state.comments[0]?.response,
+  "The caller must pass a name.",
+);
 const code = await act({ action: "code", node: "greeting.format" });
 assert.match(code.code, /export function greet\(name\)/);
 await act({
@@ -162,17 +171,17 @@ await act({
 });
 await act({ action: "mark-viewed", node: "greeting" });
 await act({ action: "mark-viewed", node: "greeting.format" });
-await act({ action: "approve", comment: "Architecture matches." });
+await act({ action: "send-review" });
 await review.server.finished;
 await review.server.close();
 
 assert.equal(completions.length, 1);
 const event = completions[0];
-assert.equal(event.version, 1);
-assert.equal(event.outcome, "approved");
+assert.equal(event.version, 2);
+assert.equal(event.outcome, "commented");
 assert.equal(event.scope, "diff");
-assert.equal(event.comments.length, 1);
-assert.equal(event.questions.length, 1);
+assert.equal(event.comments.length, 2);
+assert.equal(event.questions.length, 0);
 assert.deepEqual(JSON.parse(readFileSync(plan.completionPath, "utf8")), event);
 
 mkdirSync(out, { recursive: true });

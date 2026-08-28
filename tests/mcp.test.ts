@@ -156,7 +156,7 @@ test("MCP lists only progressive graph tools", async () => {
         "quick_review_graph_submit",
         "quick_review_graph_expand",
         "quick_review_wait",
-        "quick_review_answer",
+        "quick_review_comment_respond",
         "quick_review_close",
       ],
     );
@@ -181,7 +181,7 @@ test("unscoped MCP start defaults to a committed HEAD graph", async () => {
   }
 });
 
-test("MCP enhances, answers, and approves the project graph", async () => {
+test("MCP enhances, responds to comments, and sends neutral review", async () => {
   const session = client();
   try {
     const review = await opened(session);
@@ -195,32 +195,29 @@ test("MCP enhances, answers, and approves the project graph", async () => {
     });
     assert.equal((await enhancing).payload.data.nodes.length, 2);
 
-    const asking = act(review.url, {
-      action: "ask",
-      node: "greeting.format",
-      comment: "Why interpolate?",
+    assert.equal(
+      (
+        await act(review.url, {
+          action: "send-comment",
+          node: "greeting.format",
+          line: "2",
+          comment: "Why interpolate?",
+        })
+      ).status,
+      200,
+    );
+    const comment = await session.tool("quick_review_wait");
+    const commentId = /commentId ([0-9a-f]{24})/.exec(body(comment));
+    assert.ok(commentId);
+    await session.tool("quick_review_comment_respond", {
+      commentId: commentId[1],
+      response: "It formats the supplied name.",
     });
-    const question = await session.tool("quick_review_wait");
-    const questionId = /questionId ([0-9a-f]{24})/.exec(body(question));
-    assert.ok(questionId);
-    await session.tool("quick_review_answer", {
-      questionId: questionId[1],
-      answer: "It formats the supplied name.",
-    });
-    assert.equal((await asking).status, 200);
 
-    await act(review.url, { action: "mark-viewed", node: "greeting" });
-    await act(review.url, {
-      action: "mark-viewed",
-      node: "greeting.format",
-    });
-    const approving = act(review.url, {
-      action: "approve",
-      comment: "Architecture matches.",
-    });
+    const sending = act(review.url, { action: "send-review" });
     const outcome = await session.tool("quick_review_wait");
-    assert.match(body(outcome), /approved the exact DIFF project graph/);
-    assert.equal((await approving).status, 200);
+    assert.match(body(outcome), /ended with neutral feedback/);
+    assert.equal((await sending).status, 200);
   } finally {
     await session.cleanup();
   }
@@ -244,13 +241,14 @@ test("MCP supports committed HEAD graphs", async () => {
   }
 });
 
-test("a cancelled wait leaves the graph question queued", async () => {
+test("a cancelled wait leaves the graph comment queued", async () => {
   const session = client();
   try {
     const review = await opened(session);
-    const asking = act(review.url, {
-      action: "ask",
+    const sending = act(review.url, {
+      action: "send-comment",
       node: "greeting",
+      line: "1",
       comment: "Is this exact?",
     });
     const first = session.request("tools/call", {
@@ -259,14 +257,14 @@ test("a cancelled wait leaves the graph question queued", async () => {
     });
     session.notify("notifications/cancelled", { requestId: first.id });
     await first.result;
+    assert.equal((await sending).status, 200);
     const second = await session.tool("quick_review_wait");
-    const questionId = /questionId ([0-9a-f]{24})/.exec(body(second));
-    assert.ok(questionId);
-    await session.tool("quick_review_answer", {
-      questionId: questionId[1],
-      answer: "Yes.",
+    const commentId = /commentId ([0-9a-f]{24})/.exec(body(second));
+    assert.ok(commentId);
+    await session.tool("quick_review_comment_respond", {
+      commentId: commentId[1],
+      response: "Yes.",
     });
-    assert.equal((await asking).status, 200);
   } finally {
     await session.cleanup();
   }

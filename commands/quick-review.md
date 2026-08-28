@@ -19,13 +19,13 @@ Then run this loop:
 3. Call `quick_review_wait`. It blocks until the reviewer acts.
    - An enhancement: inspect the requested node and answer with
      `quick_review_graph_expand`, then wait again.
-   - A question: answer it with `quick_review_answer`, then call
-     `quick_review_wait` again.
+   - A comment: inspect it and respond with `quick_review_comment_respond`, then
+     call `quick_review_wait` again.
    - The outcome: the review is over. Stop waiting and report it.
    - Nothing yet: call `quick_review_wait` again.
 
 The reviewer has no way to reach you except through `quick_review_wait`, so a
-question goes unanswered for as long as you are not waiting. Keep the loop going
+comment stays queued for as long as you are not waiting. Keep the loop going
 until the outcome arrives, even when a wait returns empty several times.
 
 Do not change any file, land anything, or decide the review yourself. The

@@ -4,8 +4,8 @@ import { createHash } from "node:crypto";
 import { LINE_RANGE, SAFE_PATH, SHA } from "./contract.ts";
 
 export const GRAPH_ARTIFACT_VERSION = 1;
-export const GRAPH_STATE_VERSION = 1;
-export const GRAPH_COMPLETION_VERSION = 1;
+export const GRAPH_STATE_VERSION = 2;
+export const GRAPH_COMPLETION_VERSION = 2;
 
 export const GRAPH_LIMITS = {
   artifact: 256 * 1024,
@@ -131,12 +131,22 @@ export interface GraphQuestion {
   answer: string;
 }
 
+export type GraphCommentDelivery =
+  | "draft"
+  | "queued"
+  | "active"
+  | "answered"
+  | "failed"
+  | "superseded";
+
 export interface GraphComment {
   id: string;
   nodeId: string;
   file: string;
   lines: string;
   body: string;
+  delivery: GraphCommentDelivery;
+  response: string;
 }
 
 export interface GraphState {
@@ -148,12 +158,12 @@ export interface GraphState {
   viewed: Record<string, boolean>;
   questions: GraphQuestion[];
   comments: GraphComment[];
-  outcome: "open" | "approved" | "changes-requested";
+  outcome: "open" | "approved" | "changes-requested" | "commented";
 }
 
 export interface GraphCompletionEvent {
   version: number;
-  outcome: "approved" | "changes-requested";
+  outcome: "approved" | "changes-requested" | "commented";
   scope: GraphScope;
   repository: string;
   baseRef: string;

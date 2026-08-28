@@ -15,6 +15,7 @@ import {
   assertGraphRange,
   parseGraphDelta,
   parseProjectGraph,
+  type GraphComment,
   type GraphCompletionEvent,
   type GraphDelta,
   type GraphNode,
@@ -22,9 +23,9 @@ import {
 } from "./graph-contract.ts";
 import {
   buildExpansionPrompt,
+  buildGraphCommentPrompt,
   buildGraphCompletionMessage,
   buildGraphPrompt,
-  buildGraphQuestionPrompt,
 } from "./graph-prompt.ts";
 import {
   discardGraphPlan,
@@ -35,9 +36,9 @@ import { bounded, LIMITS } from "./contract.ts";
 import { parseOptions, USAGE } from "./options.ts";
 
 const REQUEST_TIMEOUT = 15 * 60 * 1000;
-const QUESTION_TYPE = "quick-review-question";
+const COMMENT_TYPE = "quick-review-comment";
 
-interface PendingQuestion {
+interface PendingComment {
   resolve(answer: string): void;
   reject(error: Error): void;
 }
@@ -89,14 +90,14 @@ function guidanceFrom(ctx: {
   return result.slice(0, 32);
 }
 
-/** Take plain assistant text only from the response segment for this question. */
+/** Take plain assistant text only from the response segment for this comment. */
 function answerFor(ctx: ExtensionContext, id: string): string | undefined {
   const entries = ctx.sessionManager.getBranch();
   const asked = entries.findIndex(
     (entry) =>
       entry.type === "custom_message" &&
-      entry.customType === QUESTION_TYPE &&
-      (entry.details as { questionId?: string } | undefined)?.questionId === id,
+      entry.customType === COMMENT_TYPE &&
+      (entry.details as { commentId?: string } | undefined)?.commentId === id,
   );
   if (asked < 0) return undefined;
   let answer = "";
@@ -121,7 +122,7 @@ export default function quickReview(pi: ExtensionAPI): void {
     | undefined;
   let active: OpenGraphReview | undefined;
   let opening: AbortController | undefined;
-  const questions = new Map<string, PendingQuestion>();
+  const comments = new Map<string, PendingComment>();
   const expansions = new Map<string, PendingExpansion>();
 
   const discardPending = () => {
@@ -142,9 +143,9 @@ export default function quickReview(pi: ExtensionAPI): void {
   };
 
   const failRequests = (reason: string) => {
-    for (const [id, question] of questions) {
-      questions.delete(id);
-      question.reject(new Error(reason));
+    for (const [id, comment] of comments) {
+      comments.delete(id);
+      comment.reject(new Error(reason));
     }
     for (const [id, expansion] of expansions) {
       expansions.delete(id);
@@ -152,38 +153,46 @@ export default function quickReview(pi: ExtensionAPI): void {
     }
   };
 
-  const ask = (request: {
+  const comment = (request: {
     node: GraphNode;
-    question: string;
+    comment: GraphComment;
+    signal: AbortSignal;
   }): Promise<string> => {
     const review = active;
     if (!review) throw new Error("no project graph is open");
-    const id = randomBytes(12).toString("hex");
+    const id = request.comment.id;
     return new Promise<string>((resolve, reject) => {
+      if (request.signal.aborted) {
+        reject(new Error("the comment was superseded"));
+        return;
+      }
       const timer = setTimeout(() => {
-        questions.delete(id);
-        reject(new Error("the session agent did not answer in time"));
+        comments.delete(id);
+        reject(new Error("the session agent did not respond in time"));
       }, REQUEST_TIMEOUT);
       timer.unref?.();
       const settle = (finish: () => void) => {
         clearTimeout(timer);
-        questions.delete(id);
+        request.signal.removeEventListener("abort", abort);
+        comments.delete(id);
         finish();
       };
-      questions.set(id, {
+      const abort = () =>
+        settle(() => reject(new Error("the comment was superseded")));
+      comments.set(id, {
         resolve: (answer) => settle(() => resolve(answer)),
         reject: (error) => settle(() => reject(error)),
       });
+      request.signal.addEventListener("abort", abort, { once: true });
       pi.sendMessage(
         {
-          customType: QUESTION_TYPE,
-          content: buildGraphQuestionPrompt({
-            id,
+          customType: COMMENT_TYPE,
+          content: buildGraphCommentPrompt({
             ...request,
             revision: review.plan.inputs.revision,
           }),
           display: true,
-          details: { questionId: id, nodeId: request.node.id },
+          details: { commentId: id, nodeId: request.node.id },
         },
         { deliverAs: "followUp", triggerTurn: true },
       );
@@ -246,7 +255,10 @@ export default function quickReview(pi: ExtensionAPI): void {
           display: true,
           details: event,
         },
-        { deliverAs: "followUp", triggerTurn: true },
+        {
+          deliverAs: event.outcome === "commented" ? "steer" : "followUp",
+          triggerTurn: true,
+        },
       );
     } catch {
       /* completion.json holds the durable outcome */
@@ -297,7 +309,7 @@ export default function quickReview(pi: ExtensionAPI): void {
             ...pi.getActiveTools(),
             "quick_review_graph_submit",
             "quick_review_graph_expand",
-            "quick_review_answer",
+            "quick_review_comment_respond",
           ]),
         ]);
         say(
@@ -411,7 +423,7 @@ export default function quickReview(pi: ExtensionAPI): void {
           review = await openGraphReview(
             request.plan,
             graph,
-            { ask, expand, complete },
+            { comment, expand, complete },
             { signal },
           );
           if (signal.aborted || active || pending !== request) {
@@ -437,7 +449,7 @@ export default function quickReview(pi: ExtensionAPI): void {
           content: [
             {
               type: "text" as const,
-              text: `Quick Review project graph is open at ${review.url} with ${graph.nodes.length} initial nodes. Wait for enhancement requests, questions, or the outcome.`,
+              text: `Quick Review project graph is open at ${review.url} with ${graph.nodes.length} initial nodes. Wait for enhancement requests, comments, or the outcome.`,
             },
           ],
           details: {
@@ -498,16 +510,16 @@ export default function quickReview(pi: ExtensionAPI): void {
 
   pi.registerTool(
     defineTool({
-      name: "quick_review_answer",
-      label: "Answer graph question",
+      name: "quick_review_comment_respond",
+      label: "Respond to review comment",
       description:
-        "Answer one open Quick Review graph question. Only call this for a questionId the page asked for.",
-      promptSnippet: "Answer one open Quick Review graph question by id",
+        "Respond to the one active Quick Review comment. Only call this for a commentId the page sent.",
+      promptSnippet: "Respond to one active Quick Review comment by id",
       executionMode: "sequential",
       parameters: Type.Object(
         {
-          questionId: Type.String({ pattern: "^[0-9a-f]{24}$" }),
-          answer: Type.String({
+          commentId: Type.String({ pattern: "^[0-9a-f]{24}$" }),
+          response: Type.String({
             minLength: 1,
             maxLength: LIMITS.answer,
           }),
@@ -515,29 +527,32 @@ export default function quickReview(pi: ExtensionAPI): void {
         { additionalProperties: false },
       ),
       async execute(_id, params) {
-        const question = questions.get(params.questionId);
-        if (!question)
-          throw new Error("that Quick Review question is no longer open");
-        question.resolve(params.answer);
+        const comment = comments.get(params.commentId);
+        if (!comment)
+          throw new Error("that Quick Review comment is no longer active");
+        comment.resolve(params.response);
         return {
           content: [
-            { type: "text" as const, text: "The reviewer has the answer." },
+            {
+              type: "text" as const,
+              text: "The reviewer has the comment response.",
+            },
           ],
-          details: { questionId: params.questionId },
+          details: { commentId: params.commentId },
         };
       },
     }),
   );
 
   pi.on("agent_settled", (_event, ctx) => {
-    for (const [id, question] of [...questions]) {
+    for (const [id, comment] of [...comments]) {
       const answer = answerFor(ctx, id);
       if (answer === undefined) continue;
-      questions.delete(id);
-      if (answer) question.resolve(answer);
+      comments.delete(id);
+      if (answer) comment.resolve(answer);
       else
-        question.reject(
-          new Error("the session agent finished without an answer"),
+        comment.reject(
+          new Error("the session agent finished without a response"),
         );
     }
   });

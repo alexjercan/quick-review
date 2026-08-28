@@ -12,7 +12,7 @@
 
 ## Implementation
 
-- `npm run check` passed with 112 tests after graph mode replaced the adapter
+- `npm run check` passed with 114 tests after graph mode replaced the adapter
   walkthrough paths. This includes strict graph and delta
   parsing, cycles and hostile text, atomic graph state, HEAD and diff planning,
   moved revisions, queue cancellation, real loopback graph actions, Pi adapter
@@ -31,6 +31,12 @@
   both axes, moving grid coordinates, and Ctrl+Enter Ask submission.
 - Project structure descendants render fixed-width indentation guides and a
   direct-parent branch connector at each nested depth.
+- Chromium verified node and exact-line comment composers, passive save,
+  Ctrl+Enter nonblocking agent delivery, queued/active/answered rendering,
+  response display, neutral Send review, and the three-second close countdown.
+- Focused server and adapter tests verify FIFO single-agent delivery, exact line
+  bounds, superseding active and queued comments, neutral version 2 completion,
+  and current-session triage instructions.
 - The top-center target was 18.08 pixels below the viewport top and 0.10 pixels
   from its horizontal center in a 1600x1000 Chromium viewport.
 - Captured and inspected `/tmp/quick-review-graph-production.png`. The production
