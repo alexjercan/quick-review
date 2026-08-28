@@ -17,7 +17,13 @@ import { test } from "node:test";
 import { COMPLETION_EVENT } from "../extensions/quick-review/contract.ts";
 import quickReview from "../extensions/quick-review/index.ts";
 import { createPi, type PiHarness } from "./pi-harness.ts";
-import { repository, walkthrough, type Fixture } from "./helpers.ts";
+import {
+  graphDelta,
+  projectGraph,
+  repository,
+  walkthrough,
+  type Fixture,
+} from "./helpers.ts";
 
 interface Session {
   pi: PiHarness;
@@ -91,7 +97,10 @@ test("the extension registers its commands and tools", async () => {
   try {
     await assert.rejects(base.pi.run("nope"), /no command named/);
     await base.pi.run("quick-review", "--help");
-    assert.match(base.pi.notifications[0]!.message, /\/quick-review \[--base/);
+    assert.match(
+      base.pi.notifications[0]!.message,
+      /\/quick-review \[--scope head\|diff\]/,
+    );
     await base.pi.run("quick-review-close");
     assert.match(base.pi.notifications[1]!.message, /No Quick Review is open/);
   } finally {
@@ -131,6 +140,110 @@ test("the command asks the session agent for a walkthrough", async () => {
     assert.ok(base.pi.activeTools.includes("read"));
     assert.match(base.pi.notifications[0]!.message, /Building the walkthrough/);
   } finally {
+    base.cleanup();
+  }
+});
+
+test("the extension opens and progressively enhances a diff project graph", async () => {
+  const base = start();
+  try {
+    await base.pi.run(
+      "quick-review",
+      `--scope diff --base ${base.fixture.base} --no-open`,
+    );
+    const request = base.pi.deliver("quick-review-graph-request");
+    const revision = String(request.details?.revision);
+    const baseRevision = String(request.details?.baseRevision);
+    assert.match(request.content, /quick_review_graph_submit/);
+    const submitted = await base.pi.call("quick_review_graph_submit", {
+      revision,
+      graph: projectGraph(revision, baseRevision, "diff"),
+      nodeCount: 1,
+    });
+    const url = String((submitted.details as { url?: string }).url);
+    const act = async (body: object) => {
+      const response = await fetch(new URL("action", url), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      return {
+        status: response.status,
+        payload: (await response.json()) as any,
+      };
+    };
+
+    const enhancing = act({ action: "enhance", node: "greeting" });
+    const expansion = await waitFor(() =>
+      base.pi.sent.find((item) => item.customType === "quick-review-expansion"),
+    );
+    await base.pi.call("quick_review_graph_expand", {
+      requestId: String(expansion.details?.requestId),
+      delta: graphDelta(revision),
+    });
+    assert.equal((await enhancing).payload.data.nodes.length, 2);
+
+    const asking = act({
+      action: "ask",
+      node: "greeting.format",
+      comment: "Why interpolate?",
+    });
+    const question = await waitFor(() =>
+      base.pi.sent.find((item) => item.customType === "quick-review-question"),
+    );
+    await base.pi.call("quick_review_answer", {
+      questionId: String(question.details?.questionId),
+      answer: "It formats the supplied name.",
+    });
+    assert.equal((await asking).status, 200);
+    await act({ action: "mark-viewed", node: "greeting" });
+    await act({ action: "mark-viewed", node: "greeting.format" });
+    const approved = await act({
+      action: "approve",
+      comment: "Architecture matches.",
+    });
+    assert.equal(approved.status, 200);
+    assert.equal(base.pi.emitted.at(-1)?.name, "quick-review:graph-completed");
+  } finally {
+    await base.pi.fire("session_shutdown");
+    base.cleanup();
+  }
+});
+
+test("the extension approves a committed HEAD project graph", async () => {
+  const base = start();
+  try {
+    await base.pi.run("quick-review", "--scope head --no-open");
+    const request = base.pi.deliver("quick-review-graph-request");
+    const revision = String(request.details?.revision);
+    assert.equal(request.details?.baseRevision, revision);
+    const submitted = await base.pi.call("quick_review_graph_submit", {
+      revision,
+      graph: projectGraph(revision, revision, "head"),
+      nodeCount: 1,
+    });
+    const url = String((submitted.details as { url?: string }).url);
+    const act = async (body: object) => {
+      const response = await fetch(new URL("action", url), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      return {
+        status: response.status,
+        payload: (await response.json()) as any,
+      };
+    };
+    await act({ action: "mark-viewed", node: "greeting" });
+    assert.equal(
+      (await act({ action: "approve", comment: "Snapshot accepted." })).status,
+      200,
+    );
+    const event = base.pi.emitted.at(-1)!;
+    assert.equal(event.name, "quick-review:graph-completed");
+    assert.equal((event.payload as { scope: string }).scope, "head");
+  } finally {
+    await base.pi.fire("session_shutdown");
     base.cleanup();
   }
 });

@@ -63,7 +63,7 @@ export interface OpenReview {
   url: string;
 }
 
-function stateRoot(): string {
+export function reviewStateRoot(): string {
   const override = process.env.QUICK_REVIEW_STATE_DIR;
   if (override) return override;
   const base = process.env.XDG_STATE_HOME || join(homedir(), ".local", "state");
@@ -105,7 +105,7 @@ export async function planReview(options: PlanOptions): Promise<ReviewPlan> {
   const subject = await git.subject(repository, revision);
   const dirty = await git.isDirty(repository);
   return withReviewDirectory(
-    stateRoot(),
+    reviewStateRoot(),
     () => `${revision.slice(0, 12)}-${randomBytes(8).toString("hex")}`,
     (directory) => {
       const plan: ReviewPlan = {

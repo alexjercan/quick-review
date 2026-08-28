@@ -12,6 +12,31 @@ import {
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { openBrowser } from "./browser.ts";
+import { planAnalysis, verifyAnalysis, type GraphPlan } from "./analysis.ts";
+import {
+  GRAPH_COMPLETION_EVENT,
+  GRAPH_LIMITS,
+  type GraphCompletionEvent,
+  type GraphDelta,
+  type GraphNode,
+  type GuidanceSource,
+} from "./graph-contract.ts";
+import {
+  assertGraphRange,
+  parseGraphDelta,
+  parseProjectGraph,
+} from "./graph-contract.ts";
+import {
+  buildExpansionPrompt,
+  buildGraphCompletionMessage,
+  buildGraphPrompt,
+  buildGraphQuestionPrompt,
+} from "./graph-prompt.ts";
+import {
+  discardGraphPlan,
+  openGraphReview,
+  type OpenGraphReview,
+} from "./graph-review.ts";
 import {
   bounded,
   COMPLETION_EVENT,
@@ -45,6 +70,13 @@ interface PendingQuestion {
   reject(error: Error): void;
 }
 
+interface PendingExpansion {
+  revision: string;
+  parentId: string;
+  resolve(delta: GraphDelta): void;
+  reject(error: Error): void;
+}
+
 /** One page opening in flight, owned by the session that started it. */
 interface Opening {
   plan: ReviewPlan;
@@ -68,6 +100,33 @@ function notifier(
       /* the session moved on */
     }
   };
+}
+
+function guidanceFrom(ctx: {
+  getSystemPromptOptions?: () => unknown;
+}): GuidanceSource[] {
+  if (typeof ctx.getSystemPromptOptions !== "function") return [];
+  const options = ctx.getSystemPromptOptions() as {
+    contextFiles?: Array<{ path?: unknown }>;
+    skills?: Array<{ path?: unknown; name?: unknown }>;
+    customPrompt?: unknown;
+  };
+  const result: GuidanceSource[] = [];
+  for (const file of options.contextFiles ?? [])
+    if (typeof file.path === "string")
+      result.push({ path: file.path, kind: "context" });
+  for (const skill of options.skills ?? []) {
+    const path =
+      typeof skill.path === "string"
+        ? skill.path
+        : typeof skill.name === "string"
+          ? skill.name
+          : undefined;
+    if (path) result.push({ path, kind: "skill" });
+  }
+  if (typeof options.customPrompt === "string" && options.customPrompt.trim())
+    result.push({ path: "Pi custom system prompt", kind: "host" });
+  return result.slice(0, 32);
 }
 
 /**
@@ -111,7 +170,13 @@ function answerFor(ctx: ExtensionContext, id: string): string | undefined {
 export default function quickReview(pi: ExtensionAPI): void {
   let pending: { plan: ReviewPlan; open: boolean } | undefined;
   let active: OpenReview | undefined;
+  let graphPending:
+    | { plan: GraphPlan; open: boolean; guidance: GuidanceSource[] }
+    | undefined;
+  let activeGraph: OpenGraphReview | undefined;
+  let graphOpening: AbortController | undefined;
   const questions = new Map<string, PendingQuestion>();
+  const expansions = new Map<string, PendingExpansion>();
 
   const openings = new Set<Opening>();
 
@@ -119,6 +184,9 @@ export default function quickReview(pi: ExtensionAPI): void {
     const review = active;
     active = undefined;
     if (review) await review.server.close().catch(() => undefined);
+    const graph = activeGraph;
+    activeGraph = undefined;
+    if (graph) await graph.server.close().catch(() => undefined);
   };
 
   /**
@@ -191,10 +259,26 @@ export default function quickReview(pi: ExtensionAPI): void {
     }
   };
 
+  const discardGraphPending = () => {
+    const request = graphPending;
+    graphPending = undefined;
+    if (request) {
+      try {
+        discardGraphPlan(request.plan, true);
+      } catch {
+        /* a leftover plan directory is not worth failing a close over */
+      }
+    }
+  };
+
   const failQuestions = (reason: string) => {
     for (const [id, question] of questions) {
       questions.delete(id);
       question.reject(new Error(reason));
+    }
+    for (const [id, expansion] of expansions) {
+      expansions.delete(id);
+      expansion.reject(new Error(reason));
     }
   };
 
@@ -238,6 +322,103 @@ export default function quickReview(pi: ExtensionAPI): void {
     });
   };
 
+  const graphAsk = (request: {
+    node: GraphNode;
+    question: string;
+  }): Promise<string> => {
+    const review = activeGraph;
+    if (!review) throw new Error("no project graph is open");
+    const id = randomBytes(12).toString("hex");
+    return new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        questions.delete(id);
+        reject(new Error("the session agent did not answer in time"));
+      }, QUESTION_TIMEOUT);
+      timer.unref?.();
+      const settle = (finish: () => void) => {
+        clearTimeout(timer);
+        questions.delete(id);
+        finish();
+      };
+      questions.set(id, {
+        resolve: (answer) => settle(() => resolve(answer)),
+        reject: (error) => settle(() => reject(error)),
+      });
+      pi.sendMessage(
+        {
+          customType: QUESTION_TYPE,
+          content: buildGraphQuestionPrompt({
+            id,
+            ...request,
+            revision: review.plan.inputs.revision,
+          }),
+          display: true,
+          details: { questionId: id, nodeId: request.node.id },
+        },
+        { deliverAs: "followUp", triggerTurn: true },
+      );
+    });
+  };
+
+  const graphExpand = (request: {
+    node: GraphNode;
+    knownIds: string[];
+  }): Promise<GraphDelta> => {
+    const review = activeGraph;
+    if (!review) throw new Error("no project graph is open");
+    const id = randomBytes(12).toString("hex");
+    return new Promise<GraphDelta>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        expansions.delete(id);
+        reject(
+          new Error("the session agent did not enhance the graph in time"),
+        );
+      }, QUESTION_TIMEOUT);
+      timer.unref?.();
+      const settle = (finish: () => void) => {
+        clearTimeout(timer);
+        expansions.delete(id);
+        finish();
+      };
+      expansions.set(id, {
+        revision: review.plan.inputs.revision,
+        parentId: request.node.id,
+        resolve: (delta) => settle(() => resolve(delta)),
+        reject: (error) => settle(() => reject(error)),
+      });
+      pi.sendMessage(
+        {
+          customType: "quick-review-expansion",
+          content: buildExpansionPrompt({
+            id,
+            revision: review.plan.inputs.revision,
+            ...request,
+          }),
+          display: true,
+          details: { requestId: id, nodeId: request.node.id },
+        },
+        { deliverAs: "followUp", triggerTurn: true },
+      );
+    });
+  };
+
+  const graphComplete = (event: GraphCompletionEvent, warning?: string) => {
+    try {
+      pi.events.emit(GRAPH_COMPLETION_EVENT, event);
+    } catch {}
+    try {
+      pi.sendMessage(
+        {
+          customType: "quick-review-graph-outcome",
+          content: buildGraphCompletionMessage(event, warning),
+          display: true,
+          details: event,
+        },
+        { deliverAs: "followUp", triggerTurn: true },
+      );
+    } catch {}
+  };
+
   const complete = (event: CompletionEvent, warning?: string) => {
     // The decision is already durable. Neither delivery may undo it, and one
     // failing must not stop the other.
@@ -269,7 +450,14 @@ export default function quickReview(pi: ExtensionAPI): void {
   pi.registerCommand("quick-review", {
     description: "Review a git range and open the local Quick Review page",
     getArgumentCompletions: (prefix: string) => {
-      const flags = ["--base", "--target", "--repo", "--no-open", "--help"]
+      const flags = [
+        "--scope",
+        "--base",
+        "--target",
+        "--repo",
+        "--no-open",
+        "--help",
+      ]
         .filter((flag) => flag.startsWith(prefix))
         .map((flag) => ({ value: flag, label: flag }));
       return flags.length > 0 ? flags : null;
@@ -279,6 +467,7 @@ export default function quickReview(pi: ExtensionAPI): void {
       // Only this invocation's own plan may be discarded on failure. A refused
       // duplicate must leave the review it collided with untouched.
       let created: ReviewPlan | undefined;
+      let createdGraph: GraphPlan | undefined;
       try {
         const options = parseOptions(args ?? "");
         if (options.help) {
@@ -292,10 +481,53 @@ export default function quickReview(pi: ExtensionAPI): void {
           );
         // A pending plan is an open review that has not reached its page yet.
         // Replacing it would strand the first agent's submission.
-        if (active || pending)
+        if (active || pending || activeGraph || graphPending)
           throw new Error(
             "a Quick Review is already open; finish it on the page or run /quick-review-close",
           );
+        if (options.scope) {
+          if (options.scope === "head" && options.baseRef)
+            throw new Error("--base is not used with --scope head");
+          const plan = await planAnalysis({
+            cwd: ctx.cwd,
+            scope: options.scope,
+            repository: options.repository,
+            baseRef: options.baseRef,
+            targetRef: options.targetRef,
+          });
+          createdGraph = plan;
+          graphPending = {
+            plan,
+            open: options.open,
+            guidance: guidanceFrom(ctx),
+          };
+          pi.setActiveTools([
+            ...new Set([
+              ...pi.getActiveTools(),
+              "quick_review_graph_submit",
+              "quick_review_graph_expand",
+              "quick_review_answer",
+            ]),
+          ]);
+          say(
+            `Quick Review: building the ${plan.scope.toUpperCase()} project graph at ${plan.inputs.revision.slice(0, 12)}.`,
+            "info",
+          );
+          pi.sendMessage(
+            {
+              customType: "quick-review-graph-request",
+              content: buildGraphPrompt(plan, graphPending.guidance),
+              display: false,
+              details: {
+                ...plan.inputs,
+                scope: plan.scope,
+                directory: plan.directory,
+              },
+            },
+            { deliverAs: "followUp", triggerTurn: true },
+          );
+          return;
+        }
         const plan = await planReview({
           cwd: ctx.cwd,
           repository: options.repository,
@@ -333,6 +565,14 @@ export default function quickReview(pi: ExtensionAPI): void {
             /* a leftover plan directory is not worth failing a command over */
           }
         }
+        if (createdGraph) {
+          if (graphPending?.plan === createdGraph) graphPending = undefined;
+          try {
+            discardGraphPlan(createdGraph, true);
+          } catch {
+            /* a leftover graph directory is not worth failing a command over */
+          }
+        }
         const detail = error instanceof Error ? error.message : String(error);
         // Modes without UI have no notification channel, so the command error
         // path is the only way the caller learns anything at all.
@@ -345,10 +585,16 @@ export default function quickReview(pi: ExtensionAPI): void {
   pi.registerCommand("quick-review-close", {
     description: "Close the open Quick Review page without a decision",
     handler: async (_args, ctx) => {
-      const wasPending = pending !== undefined || openings.size > 0;
+      const wasPending =
+        pending !== undefined ||
+        graphPending !== undefined ||
+        openings.size > 0 ||
+        graphOpening !== undefined;
       discardPending();
+      discardGraphPending();
+      graphOpening?.abort();
       failQuestions("the review page was closed");
-      const wasOpen = active !== undefined;
+      const wasOpen = active !== undefined || activeGraph !== undefined;
       await closeOpenings();
       await closeActive();
       notifier(ctx)(
@@ -450,6 +696,148 @@ export default function quickReview(pi: ExtensionAPI): void {
 
   pi.registerTool(
     defineTool({
+      name: "quick_review_graph_submit",
+      label: "Submit project graph",
+      description:
+        "Submit the bounded exact-revision project graph once. This opens the project decompiler page.",
+      promptSnippet: "Submit the requested Quick Review project graph",
+      executionMode: "sequential",
+      parameters: Type.Object(
+        {
+          revision: Type.String({ pattern: "^[0-9a-f]{40}$" }),
+          graph: Type.String({
+            minLength: 1,
+            maxLength: GRAPH_LIMITS.artifact,
+          }),
+          nodeCount: Type.Integer({ minimum: 1, maximum: GRAPH_LIMITS.nodes }),
+        },
+        { additionalProperties: false },
+      ),
+      async execute(_id, params, toolSignal, _update, ctx) {
+        const request = graphPending;
+        if (!request)
+          throw new Error("no Quick Review is waiting for a project graph");
+        if (activeGraph || active)
+          throw new Error("a Quick Review is already open");
+        if (params.revision !== request.plan.inputs.revision)
+          throw new Error("project graph revision does not match the review");
+        const graph = parseProjectGraph(params.graph);
+        assertGraphRange(
+          graph,
+          request.plan.scope,
+          request.plan.inputs.revision,
+          request.plan.inputs.baseRevision,
+        );
+        const trustedGuidance = new Set(
+          request.guidance.map((item) => `${item.kind}\0${item.path}`),
+        );
+        if (
+          graph.guidance.some(
+            (item) => !trustedGuidance.has(`${item.kind}\0${item.path}`),
+          )
+        )
+          throw new Error("project graph reports guidance Pi did not load");
+        if (graph.nodes.length !== params.nodeCount)
+          throw new Error(
+            `nodeCount is ${params.nodeCount} but the graph has ${graph.nodes.length} nodes`,
+          );
+        const controller = new AbortController();
+        graphOpening = controller;
+        const signal = toolSignal
+          ? AbortSignal.any([toolSignal, controller.signal])
+          : controller.signal;
+        let review: OpenGraphReview;
+        try {
+          await verifyAnalysis(request.plan, signal);
+          if (signal.aborted)
+            throw new Error("the review was closed while it was opening");
+          review = await openGraphReview(
+            request.plan,
+            graph,
+            { ask: graphAsk, expand: graphExpand, complete: graphComplete },
+            { signal },
+          );
+          if (signal.aborted || activeGraph || graphPending !== request) {
+            await review.server.close().catch(() => undefined);
+            discardGraphPlan(request.plan, true);
+            throw new Error("the review was closed while it was opening");
+          }
+          graphPending = undefined;
+          activeGraph = review;
+        } catch (error) {
+          if (graphPending === request) discardGraphPending();
+          throw error;
+        } finally {
+          if (graphOpening === controller) graphOpening = undefined;
+        }
+        void review.server.finished.then(closeActive);
+        if (request.open) openBrowser(review.url);
+        notifier(ctx)(
+          `Quick Review project graph is open at ${review.url}`,
+          "info",
+        );
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Quick Review project graph is open at ${review.url} with ${graph.nodes.length} initial nodes. Wait for enhancement requests, questions, or the outcome.`,
+            },
+          ],
+          details: {
+            url: review.url,
+            nodes: graph.nodes.length,
+            revision: graph.revision,
+            scope: graph.scope,
+          },
+        };
+      },
+    }),
+  );
+
+  pi.registerTool(
+    defineTool({
+      name: "quick_review_graph_expand",
+      label: "Submit graph enhancement",
+      description:
+        "Answer one open graph enhancement request with a bounded direct-child delta.",
+      promptSnippet: "Submit one requested project graph enhancement",
+      executionMode: "sequential",
+      parameters: Type.Object(
+        {
+          requestId: Type.String({ pattern: "^[0-9a-f]{24}$" }),
+          delta: Type.String({ minLength: 1, maxLength: GRAPH_LIMITS.delta }),
+        },
+        { additionalProperties: false },
+      ),
+      async execute(_id, params) {
+        const request = expansions.get(params.requestId);
+        if (!request)
+          throw new Error("that graph enhancement request is no longer open");
+        const delta = parseGraphDelta(params.delta, request.revision);
+        if (delta.parentId !== request.parentId)
+          throw new Error(
+            "graph enhancement parent does not match the request",
+          );
+        request.resolve(delta);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "The reviewer has the enhanced graph.",
+            },
+          ],
+          details: {
+            requestId: params.requestId,
+            parentId: delta.parentId,
+            nodes: delta.nodes.length,
+          },
+        };
+      },
+    }),
+  );
+
+  pi.registerTool(
+    defineTool({
       name: "quick_review_answer",
       label: "Answer review question",
       description:
@@ -495,6 +883,8 @@ export default function quickReview(pi: ExtensionAPI): void {
 
   pi.on("session_shutdown", async () => {
     discardPending();
+    discardGraphPending();
+    graphOpening?.abort();
     failQuestions("the session is shutting down");
     await closeOpenings();
     await closeActive();

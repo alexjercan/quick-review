@@ -1,8 +1,9 @@
 # Quick Review
 
-`/quick-review` turns a git range into a walkthrough page that the session's own
-agent writes and answers questions about, and returns one versioned approval or
-change request. It runs in Pi and in Claude Code.
+`/quick-review` opens an exact-revision review written and answered by the
+session's own agent. Use the progressive project decompiler for a committed
+HEAD snapshot or diff overlay. The version 1 linear walkthrough remains
+available during the compatibility release. It runs in Pi and Claude Code.
 
 ## Pi
 
@@ -13,7 +14,9 @@ pi install npm:@alexjercan/quick-review   # or: pi install /path/to/quick-review
 Then in the session:
 
 ```
-/quick-review
+/quick-review --scope head
+/quick-review --scope diff --base origin/main --target HEAD
+/quick-review                         # legacy linear walkthrough
 /quick-review --base origin/main --target HEAD
 /quick-review --repo /path/to/repo --no-open
 /quick-review --help

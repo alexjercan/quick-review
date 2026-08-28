@@ -2,8 +2,8 @@
 
 Quick Review runs in Claude Code as a plugin. The plugin carries a stdio MCP
 server and the `/quick-review` command. The review itself is the one described
-in `docs/concept.md`: same walkthrough, same loopback page, same exact-revision
-checks, same versioned completion event.
+in `docs/concept.md`: the same legacy walkthrough or progressive project graph,
+the same loopback security, and the same exact-revision checks.
 
 ## Install
 
@@ -35,14 +35,16 @@ So the direction reverses. The agent calls `quick_review_wait`, which blocks
 until the page produces an event, and answers what it gets:
 
 ```
-quick_review_start   ->  walkthrough instructions for one exact range
-quick_review_submit  ->  the page opens
-quick_review_wait    ->  a reviewer question, or the outcome
-quick_review_answer  ->  the page unblocks
+quick_review_start         ->  instructions for a walkthrough or graph scope
+quick_review_submit        ->  the legacy page opens
+quick_review_graph_submit  ->  the project decompiler opens
+quick_review_wait          ->  enhancement, question, or outcome
+quick_review_graph_expand  ->  an enhanced subtree reaches the page
+quick_review_answer        ->  a node question unblocks
 ```
 
-`extensions/quick-review/host.ts` is the queue behind that. It holds what the
-page produced and hands over one event per wait.
+`extensions/quick-review/host.ts` and `graph-host.ts` are the queues behind
+that. They hold what the page produced and hand over one event per wait.
 
 **The reviewer can only reach the agent while the agent is waiting.** An agent
 that stops looping leaves `Explain` and `Ask agent` hanging until the question
@@ -51,11 +53,11 @@ say to keep waiting; that is the whole contract.
 
 ## What the timeouts are for
 
-| Bound                    | Value      | Why                                         |
-| ------------------------ | ---------- | ------------------------------------------- |
-| One `quick_review_wait`  | 5 minutes  | Reports nothing and asks to be called again |
-| One unanswered question  | 15 minutes | The page stops waiting on the agent         |
-| Inlined patch in `start` | 24 KiB     | Above it the agent reads `patch.diff`       |
+| Bound                                  | Value      | Why                                         |
+| -------------------------------------- | ---------- | ------------------------------------------- |
+| One `quick_review_wait`                | 5 minutes  | Reports nothing and asks to be called again |
+| One unanswered question or enhancement | 15 minutes | The page stops waiting on the agent         |
+| Inlined patch in `start`               | 24 KiB     | Above it the agent reads `patch.diff`       |
 
 A host warns above ten thousand tokens of tool output and truncates well before
 a large patch fits, so `start` stops inlining early and points at the patch file

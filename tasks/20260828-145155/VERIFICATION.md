@@ -10,7 +10,35 @@
 - Contract, completion, dirty-worktree, and command-shape decisions are explicit
   gates rather than hidden implementation assumptions.
 
-## Not yet verified
+## Implementation
 
-No production implementation has started. All behavioral and packaging checks
-remain pending under `PLAN.md`.
+- `npm run check` passed with 134 tests. This includes strict graph and delta
+  parsing, cycles and hostile text, atomic graph state, HEAD and diff planning,
+  moved revisions, queue cancellation, real loopback graph actions, Pi adapter
+  flows for HEAD and diff, and an MCP diff enhancement/question/outcome loop.
+- `nix flake check` passed all five package, test, format, Nix format, and
+  end-to-end checks after every new module was staged into the source closure.
+- Chromium CDP against the real graph server passed initial rendering, nested
+  enhancement, synchronized focus tabs, pointer wheel zoom, root dragging,
+  top-center tree snapping, and syntax highlighting.
+- The top-center target was 18.08 pixels below the viewport top and 0.10 pixels
+  from its horizontal center in a 1600x1000 Chromium viewport.
+- Captured and inspected `/tmp/quick-review-graph-production.png`. The production
+  page shows the project tree, pinned breadcrumb, graph edges, action controls,
+  highlighted code, hidden native scrollbars, minimap, status line, and final
+  review entry point.
+- `git diff --check` passed. Agent-authored additions use ASCII prose.
+
+## Scope delivered
+
+- Added explicit `--scope head|diff` graph mode while preserving the unscoped
+  walkthrough for one compatibility release.
+- Added independently versioned graph artifact, state, delta, and completion
+  contracts with documented bounds.
+- Added committed HEAD and exact diff inventory planning.
+- Added current-session root submission, enhancement, questions, and completion
+  for Pi and dependency-free MCP.
+- Added the production project-decompiler page and token-protected serialized
+  graph server actions.
+- Updated package metadata, command guidance, durable documentation, and the
+  changelog.

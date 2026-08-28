@@ -1,6 +1,6 @@
 # Implement the progressive project decompiler
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 0
 - TAGS: architecture, extension, graph, quick-review
 

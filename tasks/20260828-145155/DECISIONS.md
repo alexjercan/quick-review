@@ -30,6 +30,21 @@
 - Every graph claim must identify confidence and exact-revision evidence.
   Inferred edges must remain visibly distinct from confirmed edges.
 
+## Implementation gates
+
+- Add graph mode during one compatibility release. `/quick-review` and MCP
+  remain walkthrough mode unless `--scope diff|head` or `scope: "diff" | "head"`
+  is present. This makes the new command shape explicit and keeps old clients
+  working.
+- Keep `approved` and `changes-requested` in both scopes. In HEAD scope,
+  approval accepts the exact committed architecture snapshot; it does not claim
+  that a diff is ready to merge.
+- Review committed HEAD only. Report a dirty worktree, but exclude it from the
+  graph identity and evidence.
+- Give graph artifacts, graph state, and graph completion independent version 1
+  contracts and a separate `quick-review:graph-completed` event. Do not change
+  the meaning of walkthrough completion version 1.
+
 ## Compatibility direction
 
 - Do not mutate walkthrough contract version 1 in place. Introduce a separately

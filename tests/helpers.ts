@@ -65,6 +65,87 @@ export function repository(): Fixture {
   };
 }
 
+export function projectGraph(
+  revision: string,
+  baseRevision: string,
+  scope: "head" | "diff" = "diff",
+): string {
+  return JSON.stringify({
+    version: 1,
+    title: "Greeting architecture",
+    summary: "A small greeting component.",
+    scope,
+    revision,
+    baseRevision,
+    roots: ["greeting"],
+    nodes: [
+      {
+        id: "greeting",
+        parentId: null,
+        kind: "component",
+        title: "Greeting",
+        summary: "Formats the caller's greeting.",
+        confidence: "confirmed",
+        overlay: scope === "diff" ? "modified" : "unchanged",
+        expandable: true,
+        file: "src/app.js",
+        lines: "1-3",
+        language: "javascript",
+        evidence: [
+          {
+            file: "src/app.js",
+            lines: "1-3",
+            revision,
+            confidence: "confirmed",
+          },
+        ],
+      },
+    ],
+    edges: [],
+    guidance: [],
+  });
+}
+
+export function graphDelta(revision: string): string {
+  return JSON.stringify({
+    version: 1,
+    revision,
+    parentId: "greeting",
+    nodes: [
+      {
+        id: "greeting.format",
+        parentId: "greeting",
+        kind: "symbol",
+        title: "greet",
+        summary: "Interpolates the supplied name.",
+        confidence: "confirmed",
+        overlay: "modified",
+        expandable: false,
+        file: "src/app.js",
+        lines: "1-3",
+        language: "javascript",
+        evidence: [
+          {
+            file: "src/app.js",
+            lines: "1-3",
+            revision,
+            confidence: "confirmed",
+          },
+        ],
+      },
+    ],
+    edges: [
+      {
+        id: "greeting-contains-format",
+        source: "greeting",
+        target: "greeting.format",
+        kind: "contains",
+        confidence: "confirmed",
+      },
+    ],
+  });
+}
+
 export interface SectionFixture {
   id: string;
   importance?: string;

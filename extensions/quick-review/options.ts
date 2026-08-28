@@ -1,15 +1,20 @@
 /** Argument parsing for `/quick-review`. */
 
+import type { GraphScope } from "./graph-contract.ts";
+
 export interface CommandOptions {
   baseRef?: string;
   targetRef?: string;
   repository?: string;
+  scope?: GraphScope;
   open: boolean;
   help: boolean;
 }
 
-export const USAGE = `/quick-review [--base <ref>] [--target <ref>] [--repo <path>] [--no-open]
+export const USAGE = `/quick-review [--scope head|diff] [--base <ref>] [--target <ref>] [--repo <path>] [--no-open]
 
+  --scope <scope>  Open the progressive project graph for committed HEAD or a
+                   diff. Omit this flag for the legacy walkthrough page.
   --base <ref>     Base of the reviewed range. Defaults to the merge base with
                    the repository default branch.
   --target <ref>   Target of the reviewed range. Defaults to HEAD.
@@ -53,6 +58,15 @@ export function parseOptions(input: string): CommandOptions {
             token.slice(token.indexOf("=") + 1),
           ]
         : [token, undefined];
+    if (name === "--scope") {
+      const value = inlineValue ?? tokens[++index];
+      if (value !== "head" && value !== "diff")
+        throw new Error(`--scope must be head or diff\n\n${USAGE}`);
+      if (options.scope !== undefined)
+        throw new Error("--scope was given twice");
+      options.scope = value;
+      continue;
+    }
     const key = VALUE_FLAGS[name];
     if (!key) throw new Error(`unknown option: ${token}\n\n${USAGE}`);
     const value = inlineValue ?? tokens[++index];

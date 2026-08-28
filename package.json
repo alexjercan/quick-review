@@ -1,7 +1,7 @@
 {
   "name": "@alexjercan/quick-review",
   "version": "0.1.1",
-  "description": "Turns any git range into a reviewable walkthrough page, in Pi and in Claude Code",
+  "description": "Progressive exact-revision project graphs and walkthrough reviews for Pi and Claude Code",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -17,7 +17,8 @@
     "pi-extension",
     "claude-code-plugin",
     "mcp",
-    "code-review"
+    "code-review",
+    "architecture-graph"
   ],
   "engines": {
     "node": ">=24"

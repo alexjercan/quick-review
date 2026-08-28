@@ -11,6 +11,26 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import { openBrowser } from "./browser.ts";
+import { planAnalysis, verifyAnalysis, type GraphPlan } from "./analysis.ts";
+import {
+  GRAPH_LIMITS,
+  assertGraphRange,
+  parseGraphDelta,
+  parseProjectGraph,
+  type GraphScope,
+} from "./graph-contract.ts";
+import { createGraphQueueHost, type GraphQueueHost } from "./graph-host.ts";
+import {
+  buildExpansionPrompt,
+  buildGraphCompletionMessage,
+  buildGraphPrompt,
+  buildGraphQuestionPrompt,
+} from "./graph-prompt.ts";
+import {
+  discardGraphPlan,
+  openGraphReview,
+  type OpenGraphReview,
+} from "./graph-review.ts";
 import { LIMITS, SHA } from "./contract.ts";
 import { createQueueHost, type QueueHost } from "./host.ts";
 import {
@@ -60,14 +80,15 @@ const PROTOCOL_VERSIONS = [
 ];
 const DEFAULT_PROTOCOL = "2025-06-18";
 
-const INSTRUCTIONS = `Quick Review turns a git range into a walkthrough page that the user reviews change by change.
+const INSTRUCTIONS = `Quick Review turns a git range into a walkthrough or a progressive project graph. Pass scope head or diff to quick_review_start for graph mode; omit scope for the legacy walkthrough.
 
 Run it as a loop and do not stop early:
-1. quick_review_start returns the walkthrough instructions. Follow them.
-2. quick_review_submit posts the walkthrough once. This opens the page.
-3. quick_review_wait blocks until the reviewer asks something or decides. Answer
-   a question with quick_review_answer, then call quick_review_wait again.
-   Repeat until the outcome arrives.
+1. quick_review_start returns exact-scope instructions. Follow them.
+2. In graph scope, quick_review_graph_submit opens the project decompiler.
+   Without scope, quick_review_submit opens the legacy walkthrough.
+3. quick_review_wait blocks until the reviewer asks for an enhancement, asks a
+   question, or decides. Use quick_review_graph_expand or quick_review_answer,
+   then call quick_review_wait again. Repeat until the outcome arrives.
 
 The reviewer cannot reach you except through quick_review_wait, so a question
 goes unanswered for as long as you are not waiting. Do not act on the change
@@ -101,6 +122,12 @@ const TOOLS = [
           type: "boolean",
           description: "Open a browser for the review page. Defaults to true.",
         },
+        scope: {
+          type: "string",
+          enum: ["head", "diff"],
+          description:
+            "Use the progressive project graph at committed HEAD or over a diff. Omit for the legacy walkthrough.",
+        },
       },
       additionalProperties: false,
     },
@@ -131,6 +158,39 @@ const TOOLS = [
         },
       },
       required: ["revision", "markdown", "sectionCount"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "quick_review_graph_submit",
+    description:
+      "Submit the exact-revision progressive project graph once. This opens the project decompiler page.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        revision: { type: "string", pattern: "^[0-9a-f]{40}$" },
+        graph: {
+          type: "string",
+          minLength: 1,
+          maxLength: GRAPH_LIMITS.artifact,
+        },
+        nodeCount: { type: "integer", minimum: 1, maximum: GRAPH_LIMITS.nodes },
+      },
+      required: ["revision", "graph", "nodeCount"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "quick_review_graph_expand",
+    description:
+      "Answer one graph enhancement request from quick_review_wait with a direct-child delta.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        requestId: { type: "string", pattern: "^[0-9a-f]{24}$" },
+        delta: { type: "string", minLength: 1, maxLength: GRAPH_LIMITS.delta },
+      },
+      required: ["requestId", "delta"],
       additionalProperties: false,
     },
   },
@@ -212,6 +272,16 @@ function optionalFlag(
   return value;
 }
 
+function optionalScope(
+  source: Record<string, unknown>,
+): GraphScope | undefined {
+  const value = source.scope;
+  if (value === undefined) return undefined;
+  if (value !== "head" && value !== "diff")
+    throw invalidParams("scope must be head or diff");
+  return value;
+}
+
 function requiredCount(
   source: Record<string, unknown>,
   name: string,
@@ -260,6 +330,9 @@ export function createQuickReviewMcp(options: McpOptions = {}): QuickReviewMcp {
 
   let pending: { plan: ReviewPlan; open: boolean } | undefined;
   let active: OpenReview | undefined;
+  let graphPending: { plan: GraphPlan; open: boolean } | undefined;
+  let activeGraph: OpenGraphReview | undefined;
+  let graphHost: GraphQueueHost | undefined;
   let host: QueueHost | undefined;
   // One submit may be opening a page while a close arrives. The close aborts it
   // and the submit refuses to adopt anything it produced afterwards.
@@ -279,11 +352,25 @@ export function createQuickReviewMcp(options: McpOptions = {}): QuickReviewMcp {
     if (request) drop(request.plan);
   };
 
+  const discardGraphPending = () => {
+    const request = graphPending;
+    graphPending = undefined;
+    if (request) {
+      try {
+        discardGraphPlan(request.plan, true);
+      } catch {}
+    }
+  };
+
   const closeActive = async () => {
     const review = active;
     active = undefined;
     host = undefined;
     if (review) await review.server.close().catch(() => undefined);
+    const graph = activeGraph;
+    activeGraph = undefined;
+    graphHost = undefined;
+    if (graph) await graph.server.close().catch(() => undefined);
   };
 
   const start = async (params: unknown) => {
@@ -292,12 +379,26 @@ export function createQuickReviewMcp(options: McpOptions = {}): QuickReviewMcp {
     const targetRef = optionalText(source, "target", LIMITS.ref);
     const repository = optionalText(source, "repo", LIMITS.ref * 4);
     const open = optionalFlag(source, "open") ?? true;
+    const scope = optionalScope(source);
     // A pending plan is a review that has not reached its page yet. Replacing
     // it would strand the walkthrough the agent is already writing.
-    if (active || pending)
+    if (active || pending || activeGraph || graphPending)
       throw new Error(
         "a Quick Review is already open; finish it on the page or call quick_review_close",
       );
+    if (scope) {
+      if (scope === "head" && baseRef)
+        throw new Error("base is not used with HEAD scope");
+      const plan = await planAnalysis({
+        cwd,
+        scope,
+        repository,
+        baseRef,
+        targetRef,
+      });
+      graphPending = { plan, open };
+      return text(buildGraphPrompt(plan, [], inlineLimit));
+    }
     const plan = await planReview({ cwd, repository, baseRef, targetRef });
     pending = { plan, open };
     return text(buildPrompt(plan, inlineLimit));
@@ -365,8 +466,114 @@ export function createQuickReviewMcp(options: McpOptions = {}): QuickReviewMcp {
     );
   };
 
+  const submitGraph = async (params: unknown, signal: AbortSignal) => {
+    const source = fields(params);
+    const revision = requiredText(source, "revision", 40);
+    const graphSource = requiredText(source, "graph", GRAPH_LIMITS.artifact);
+    const nodeCount = requiredCount(source, "nodeCount", GRAPH_LIMITS.nodes);
+    if (!SHA.test(revision))
+      throw invalidParams("revision must be a full commit hash");
+    const request = graphPending;
+    if (!request)
+      throw new Error("no Quick Review is waiting for a project graph");
+    if (activeGraph || active)
+      throw new Error("a Quick Review is already open");
+    if (revision !== request.plan.inputs.revision)
+      throw new Error("project graph revision does not match the review");
+    const graph = parseProjectGraph(graphSource);
+    assertGraphRange(
+      graph,
+      request.plan.scope,
+      request.plan.inputs.revision,
+      request.plan.inputs.baseRevision,
+    );
+    if (graph.nodes.length !== nodeCount)
+      throw new Error(
+        `nodeCount is ${nodeCount} but the graph has ${graph.nodes.length} nodes`,
+      );
+    const controller = new AbortController();
+    opening = controller;
+    const combined = AbortSignal.any([signal, controller.signal]);
+    const reviewHost = createGraphQueueHost();
+    let review: OpenGraphReview;
+    try {
+      await verifyAnalysis(request.plan, combined);
+      if (combined.aborted)
+        throw new Error("the review was closed while it was opening");
+      review = await openGraphReview(request.plan, graph, reviewHost, {
+        signal: combined,
+      });
+      if (combined.aborted || activeGraph) {
+        await review.server.close().catch(() => undefined);
+        discardGraphPlan(request.plan, true);
+        if (graphPending === request) graphPending = undefined;
+        throw new Error("the review was closed while it was opening");
+      }
+      graphPending = undefined;
+      activeGraph = review;
+      graphHost = reviewHost;
+    } catch (error) {
+      if (graphPending === request) discardGraphPending();
+      throw error;
+    } finally {
+      if (opening === controller) opening = undefined;
+    }
+    void review.server.finished.then(closeActive);
+    if (request.open) openBrowser(review.url);
+    return text(
+      `Quick Review project graph is open at ${review.url} with ${graph.nodes.length} nodes.\n\nCall quick_review_wait now and keep calling it until the outcome arrives.`,
+    );
+  };
+
+  const submitExpansion = async (params: unknown) => {
+    const source = fields(params);
+    const requestId = requiredText(source, "requestId", 24);
+    const deltaSource = requiredText(source, "delta", GRAPH_LIMITS.delta);
+    const current = graphHost;
+    const review = activeGraph;
+    if (!current || !review) throw new Error("no project graph is open");
+    const delta = parseGraphDelta(deltaSource, review.plan.inputs.revision);
+    if (!current.submitExpansion(requestId, delta))
+      throw new Error("that graph enhancement request is no longer open");
+    return text(
+      "The reviewer has the enhanced graph. Call quick_review_wait again.",
+    );
+  };
+
   const wait = async (params: unknown, signal: AbortSignal) => {
     fields(params);
+    if (activeGraph && graphHost) {
+      const review = activeGraph;
+      const current = graphHost;
+      const event = await current.next({ timeout: waitTimeout, signal });
+      if (!event)
+        return text(
+          activeGraph
+            ? "No Quick Review event yet. The project graph is still open. Call quick_review_wait again."
+            : "The Quick Review page was closed without a decision. Stop waiting.",
+        );
+      if (event.kind === "question")
+        return text(
+          buildGraphQuestionPrompt({
+            id: event.requestId,
+            node: event.node,
+            question: event.question,
+            revision: review.plan.inputs.revision,
+          }),
+        );
+      if (event.kind === "expansion")
+        return text(
+          buildExpansionPrompt({
+            id: event.requestId,
+            node: event.node,
+            knownIds: event.knownIds,
+            revision: review.plan.inputs.revision,
+          }),
+        );
+      return text(
+        `${buildGraphCompletionMessage(event.event, event.warning)}\n\nThe graph review is finished. Stop calling quick_review_wait.`,
+      );
+    }
     const current = host;
     const review = active;
     // The terminal action closes the page, so `active` can clear while this
@@ -403,6 +610,8 @@ export function createQuickReviewMcp(options: McpOptions = {}): QuickReviewMcp {
     const questionId = requiredText(source, "questionId", 24);
     const body = requiredText(source, "answer", LIMITS.answer);
     const current = host;
+    if (graphHost?.answer(questionId, body))
+      return text("The reviewer has the answer. Call quick_review_wait again.");
     if (!current || !current.answer(questionId, body))
       throw new Error("that Quick Review question is no longer open");
     return text("The reviewer has the answer. Call quick_review_wait again.");
@@ -410,10 +619,16 @@ export function createQuickReviewMcp(options: McpOptions = {}): QuickReviewMcp {
 
   const close = async (params: unknown) => {
     fields(params);
-    const was = active !== undefined || pending !== undefined;
+    const was =
+      active !== undefined ||
+      pending !== undefined ||
+      activeGraph !== undefined ||
+      graphPending !== undefined;
     discardPending();
+    discardGraphPending();
     opening?.abort();
     host?.fail("the review page was closed");
+    graphHost?.fail("the review page was closed");
     await closeActive();
     return text(was ? "Quick Review closed." : "No Quick Review is open.");
   };
@@ -429,6 +644,10 @@ export function createQuickReviewMcp(options: McpOptions = {}): QuickReviewMcp {
           return await start(args);
         case "quick_review_submit":
           return await submit(args, signal);
+        case "quick_review_graph_submit":
+          return await submitGraph(args, signal);
+        case "quick_review_graph_expand":
+          return await submitExpansion(args);
         case "quick_review_wait":
           return await wait(args, signal);
         case "quick_review_answer":
@@ -479,8 +698,10 @@ export function createQuickReviewMcp(options: McpOptions = {}): QuickReviewMcp {
 
     shutdown: async () => {
       discardPending();
+      discardGraphPending();
       opening?.abort();
       host?.fail("the session is shutting down");
+      graphHost?.fail("the session is shutting down");
       await closeActive();
     },
   };

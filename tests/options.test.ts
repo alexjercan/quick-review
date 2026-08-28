@@ -29,6 +29,13 @@ test("quoted values keep their spaces", () => {
   );
 });
 
+test("graph scopes are explicit", () => {
+  assert.equal(parseOptions("--scope head").scope, "head");
+  assert.equal(parseOptions("--scope=diff").scope, "diff");
+  assert.throws(() => parseOptions("--scope tree"), /head or diff/);
+  assert.throws(() => parseOptions("--scope head --scope diff"), /given twice/);
+});
+
 test("--no-open and --help are recognised", () => {
   assert.equal(parseOptions("--no-open").open, false);
   assert.equal(parseOptions("--help").help, true);

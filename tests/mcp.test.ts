@@ -16,7 +16,13 @@ import {
   createQuickReviewMcp,
   type QuickReviewMcp,
 } from "../extensions/quick-review/mcp.ts";
-import { repository, walkthrough, type Fixture } from "./helpers.ts";
+import {
+  graphDelta,
+  projectGraph,
+  repository,
+  walkthrough,
+  type Fixture,
+} from "./helpers.ts";
 
 interface ToolResult {
   content: Array<{ type: string; text: string }>;
@@ -178,6 +184,8 @@ test("the server initializes and lists its tools", async () => {
       [
         "quick_review_start",
         "quick_review_submit",
+        "quick_review_graph_submit",
+        "quick_review_graph_expand",
         "quick_review_wait",
         "quick_review_answer",
         "quick_review_close",
@@ -243,6 +251,75 @@ test("the agent walks a review from start to approval", async () => {
     assert.match(body(outcome), /approved this exact revision/);
     assert.match(body(outcome), /Looks right/);
     assert.match(body(outcome), /Stop calling quick_review_wait/);
+    assert.equal((await approving).status, 200);
+  } finally {
+    await session.cleanup();
+  }
+});
+
+test("the agent progressively enhances a diff project graph", async () => {
+  const session = client();
+  try {
+    const started = await session.tool("quick_review_start", {
+      scope: "diff",
+      base: session.fixture.base,
+      open: false,
+    });
+    const range = RANGE.exec(body(started));
+    assert.ok(range);
+    const [, baseRevision, revision] = range as unknown as [
+      string,
+      string,
+      string,
+    ];
+    assert.match(body(started), /quick_review_graph_submit/);
+    const submitted = await session.tool("quick_review_graph_submit", {
+      revision,
+      graph: projectGraph(revision, baseRevision, "diff"),
+      nodeCount: 1,
+    });
+    const urlMatch = /(http:\/\/127\.0\.0\.1:\d+\/[A-Za-z0-9_-]+\/)/.exec(
+      body(submitted),
+    );
+    assert.ok(urlMatch);
+    const url = urlMatch[1]!;
+
+    const enhancing = act(url, { action: "enhance", node: "greeting" });
+    const request = await session.tool("quick_review_wait");
+    assert.match(body(request), /Expand only the direct children/);
+    const requestIdMatch = /requestId ([0-9a-f]{24})/.exec(body(request));
+    assert.ok(requestIdMatch);
+    const requestId = requestIdMatch[1]!;
+    const expanded = await session.tool("quick_review_graph_expand", {
+      requestId,
+      delta: graphDelta(revision),
+    });
+    assert.match(body(expanded), /enhanced graph/);
+    assert.equal((await enhancing).payload.data.nodes.length, 2);
+
+    const asking = act(url, {
+      action: "ask",
+      node: "greeting.format",
+      comment: "Why interpolate?",
+    });
+    const question = await session.tool("quick_review_wait");
+    const questionIdMatch = /questionId ([0-9a-f]{24})/.exec(body(question));
+    assert.ok(questionIdMatch);
+    const questionId = questionIdMatch[1]!;
+    await session.tool("quick_review_answer", {
+      questionId,
+      answer: "It formats the supplied name.",
+    });
+    assert.equal((await asking).status, 200);
+
+    await act(url, { action: "mark-viewed", node: "greeting" });
+    await act(url, { action: "mark-viewed", node: "greeting.format" });
+    const approving = act(url, {
+      action: "approve",
+      comment: "Architecture matches.",
+    });
+    const outcome = await session.tool("quick_review_wait");
+    assert.match(body(outcome), /approved the exact DIFF project graph/);
     assert.equal((await approving).status, 200);
   } finally {
     await session.cleanup();

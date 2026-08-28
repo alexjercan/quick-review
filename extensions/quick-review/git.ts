@@ -240,6 +240,56 @@ export async function showFile(
   return result.stdout.toString("utf8");
 }
 
+export async function trackedFiles(
+  repository: string,
+  revision: string,
+  signal?: AbortSignal,
+): Promise<string[]> {
+  if (!SHA.test(revision))
+    throw new Error("project inventory needs an exact revision");
+  const result = await run(
+    repository,
+    ["ls-tree", "-r", "--name-only", "-z", revision, "--"],
+    { maxBytes: 2 * LIMITS.context, signal },
+  );
+  return result.stdout
+    .toString("utf8")
+    .split("\0")
+    .filter(Boolean)
+    .filter((file) => SAFE_PATH.test(file));
+}
+
+export interface ChangedPath {
+  file: string;
+  status: "added" | "modified" | "deleted";
+}
+
+export async function changedPaths(
+  repository: string,
+  base: string,
+  target: string,
+  signal?: AbortSignal,
+): Promise<ChangedPath[]> {
+  const result = await run(
+    repository,
+    ["diff", "--name-status", "-z", "--no-renames", base, target, "--"],
+    { maxBytes: LIMITS.context, signal },
+  );
+  const fields = result.stdout.toString("utf8").split("\0").filter(Boolean);
+  const changed: ChangedPath[] = [];
+  for (let index = 0; index + 1 < fields.length; index += 2) {
+    const status = fields[index]![0];
+    const file = fields[index + 1]!;
+    if (!SAFE_PATH.test(file)) continue;
+    changed.push({
+      file,
+      status:
+        status === "A" ? "added" : status === "D" ? "deleted" : "modified",
+    });
+  }
+  return changed;
+}
+
 export async function isDirty(repository: string): Promise<boolean> {
   const result = await run(repository, ["status", "--porcelain"], {
     maxBytes: 1024 * 1024,

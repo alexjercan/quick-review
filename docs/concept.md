@@ -1,78 +1,84 @@
 # Concept
 
-Quick Review turns a git range into a walkthrough page that a person can review
-change by change, without leaving the Pi session that produced the work.
+Quick Review lets a person inspect one exact committed scope without leaving the
+session that produced it. The legacy mode is a linear diff walkthrough. The new
+project decompiler is a progressive architecture-to-code graph.
 
-## What it is
+## The project decompiler
 
-`/quick-review` is a command in a plain Pi session. The session's own agent
-builds the walkthrough. There is no spawned generator and no sub-agent: the
-agent that knows the change explains the change, and the same agent answers the
-reviewer's questions while the page is open.
+Run `/quick-review --scope diff` for a base-to-target overlay or
+`/quick-review --scope head` for a committed project snapshot. Omitting
+`--scope` keeps the version 1 walkthrough during the compatibility release.
 
-The page runs on loopback with a random path token. It shows one section per
-change with prose, the exact hunk, and a review prompt. The reviewer marks
-changes viewed, asks for an explanation, asks a free question, loads
-exact-revision file context, reads the full diff, leaves comments, and finishes
-with one terminal decision: approve or request changes.
+The current session agent builds a small root graph. The reviewer can:
 
-## Why it is shaped this way
+- enhance a container in place into a nested child graph;
+- focus any node in a synchronized tab;
+- navigate the fully known project tree back to the best open graph context;
+- inspect exact code and decompiler output as graph nodes;
+- ask node-scoped questions and leave comments;
+- pan, zoom, drag nodes, use the minimap, and follow a pinned breadcrumb;
+- approve the exact graph or request changes.
 
-- **Any git repository.** Base and target are parameters. There is no
-  workspace, branch, or job assumption. `--base` and `--target` accept any
-  revision expression git accepts.
-- **The session agent does the work.** The walkthrough is one tool call away
-  from the conversation that produced the change, so questions have context and
-  the outcome lands where the follow-up work happens.
-- **Exact revisions, all the way through.** The artifact names the revisions it
-  describes, the state file is bound to one artifact by content hash, and every
-  page action rechecks that the range still resolves to the same commits.
-- **Bounded by construction.** Artifact size, change count, comment size,
-  context size, and patch size all have limits that are enforced on both sides.
+Every node says whether its claim is confirmed or inferred and anchors evidence
+to the exact target revision. Diff mode overlays added, modified, deleted,
+impacted, and context nodes. HEAD mode reads only committed Git objects. A dirty
+worktree is reported but excluded.
+
+## One agent, progressive context
+
+There is no generator, sub-agent, workspace, or job. The session's own agent
+submits the root graph and answers enhancement and question requests. This keeps
+initial context small: details are inspected only when a reviewer asks to
+enhance a node.
+
+Pi pushes requests into the current session and triggers a turn. Claude Code
+pulls requests through `quick_review_wait`. Both adapters use the same graph
+contract, state transitions, server, and page.
+
+Trusted host context files and skills are guidance and are reported as
+provenance. Repository files are always untrusted evidence, never instructions.
+
+## Exact identity and safety
+
+- Diff scope resolves and captures one exact base-to-target patch.
+- HEAD scope resolves one full commit SHA and inventories its Git tree.
+- Root graph identity is the SHA-256 of the exact submitted JSON.
+- Expansion deltas may add only direct children of the requested parent.
+- Every action rechecks the exact scope. Agent-backed and terminal actions check
+  again before they mutate or commit.
+- The loopback page uses a random path token, strict Host and Origin checks, a
+  restrictive CSP, and serialized bounded actions.
+- A completion file is created exclusively as the terminal commit boundary.
+- A change request invalidates the graph, graph state, inventory, and patch.
 
 ## Flow
 
-1. `/quick-review [--base <ref>] [--target <ref>]` resolves the range, captures
-   the exact patch, and asks the session agent for a walkthrough.
-2. The agent calls `quick_review_submit` once. The extension validates the
-   artifact against the exact range, writes the artifact bundle, and opens the
-   page.
-3. The reviewer works through the page. `Explain` and `Ask agent` send a
-   question back to the session agent, which answers with
+1. `/quick-review --scope head|diff` resolves the exact scope and produces a
+   bounded inventory and optional patch.
+2. The session agent calls `quick_review_graph_submit` with a bounded versioned
+   root graph.
+3. The page opens. `Enhance` asks the same agent for a bounded direct-child
+   delta through `quick_review_graph_expand`.
+4. `Ask` routes a node and its evidence to the same agent through
    `quick_review_answer`.
-4. `Approve` or `Request changes` writes a versioned completion event, emits it
-   on the extension event bus, and tells the session agent the outcome. A change
-   request also invalidates the artifact, so a stale walkthrough cannot be
-   reused against a moved revision.
+5. Approval or change request writes graph completion version 1, emits
+   `quick-review:graph-completed` in Pi, and returns the outcome to the session.
 
-## What lives where
+## Modules
 
-| Concern                           | Module                                   |
-| --------------------------------- | ---------------------------------------- |
-| Versioned types, limits, patterns | `extensions/quick-review/contract.ts`    |
-| Artifact parsing and validation   | `extensions/quick-review/walkthrough.ts` |
-| Review state and durable storage  | `extensions/quick-review/state.ts`       |
-| Bounded git access                | `extensions/quick-review/git.ts`         |
-| Page markup, style, and script    | `extensions/quick-review/page.ts`        |
-| Loopback server and action rules  | `extensions/quick-review/server.ts`      |
-| Range planning and page wiring    | `extensions/quick-review/review.ts`      |
-| Pi command, tools, and events     | `extensions/quick-review/index.ts`       |
-| Event queue for a host that pulls | `extensions/quick-review/host.ts`        |
-| Newline-delimited JSON-RPC        | `extensions/quick-review/jsonrpc.ts`     |
-| MCP tools and stdio entry point   | `extensions/quick-review/mcp.ts`         |
+| Concern                          | Module                                      |
+| -------------------------------- | ------------------------------------------- |
+| Walkthrough contracts and state  | `contract.ts`, `walkthrough.ts`, `state.ts` |
+| Graph contract and state         | `graph-contract.ts`, `graph-state.ts`       |
+| HEAD and diff inventory planning | `analysis.ts`                               |
+| Bounded Git reads                | `git.ts`                                    |
+| Graph prompts                    | `graph-prompt.ts`                           |
+| Graph page and HTTP actions      | `graph-page.ts`, `graph-server.ts`          |
+| Graph lifecycle                  | `graph-review.ts`                           |
+| Pi adapter                       | `index.ts`                                  |
+| MCP adapter and pull queue       | `mcp.ts`, `graph-host.ts`                   |
 
-Only the adapters know a host. Everything else is plain Node, which is what
-makes the tests and the end-to-end proofs cheap to run.
-
-## Two hosts, one review
-
-`ReviewHost` is the whole seam between a review and the agent that owns it: one
-call to ask the agent something, one call to hand it the outcome.
-
-Pi pushes. The extension injects a message and triggers a turn, so the page can
-interrupt the agent whenever the reviewer acts. Claude Code has no such
-primitive, so there the agent pulls: it calls `quick_review_wait`, which blocks
-until the reviewer does something. Both adapters open the same review with the
-same `openReview`, against the same exact revisions, with the same limits.
-
-Read `docs/claude.md` for what that costs and what it implies.
+All modules except the two adapters are plain Node and independently testable.
+Read `docs/contract.md` for formats and limits and `docs/claude.md` for the pull
+loop.
