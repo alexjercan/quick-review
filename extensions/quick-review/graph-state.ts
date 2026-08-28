@@ -196,17 +196,10 @@ export function recordGraphQuestion(
 }
 
 export function graphApprovable(
-  graph: ProjectGraph,
+  _graph: ProjectGraph,
   state: GraphState,
 ): boolean {
-  const { nodes } = mergeGraph(graph, state.deltas);
-  const claims = nodes.filter(
-    (node) =>
-      node.parentId === null ||
-      !node.expandable ||
-      state.deltas.some((delta) => delta.parentId === node.id),
-  );
-  return claims.every((node) => state.viewed[node.id]);
+  return state.outcome === "open";
 }
 
 export function saveGraphState(path: string, state: GraphState): void {

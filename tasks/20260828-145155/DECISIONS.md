@@ -45,6 +45,20 @@
   contracts and a separate `quick-review:graph-completed` event. Do not change
   the meaning of walkthrough completion version 1.
 
+## Interaction polish
+
+- Pan from every non-interactive canvas surface, not only the viewport element.
+  Use pointer capture and animation-frame geometry updates to keep dragging
+  stable.
+- Keep Ask and Comment composers inside their graph node. Do not interrupt graph
+  context with dialogs.
+- Remove viewed-state controls and approval gating from the graph page. Retain
+  the version 1 `viewed` state field for compatibility; this does not change a
+  contract format.
+- Render exact code as a collapsible, linked client-side projection node with
+  line numbers and syntax colors. It is not an evidence claim or graph artifact
+  node.
+
 ## Compatibility direction
 
 - Keep graph artifact, state, delta, and completion versions independent. The

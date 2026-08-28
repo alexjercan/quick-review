@@ -22,6 +22,10 @@
 - Chromium CDP against the real graph server passed initial rendering, nested
   enhancement, synchronized focus tabs, pointer wheel zoom, root dragging,
   top-center tree snapping, and syntax highlighting.
+- A polish follow-up verified background canvas panning in both axes, inline Ask
+  and Comment composers, visible in-progress enhancement state, collapsible
+  linked code projections, line numbers, and syntax colors. Captured and
+  inspected `/tmp/quick-review-graph-polish.png`.
 - The top-center target was 18.08 pixels below the viewport top and 0.10 pixels
   from its horizontal center in a 1600x1000 Chromium viewport.
 - Captured and inspected `/tmp/quick-review-graph-production.png`. The production
@@ -42,6 +46,7 @@
 - Added current-session root submission, enhancement, questions, and completion
   for Pi and dependency-free MCP.
 - Added the production project-decompiler page and token-protected serialized
-  graph server actions.
+  graph server actions. Polished panning, inline node-local review input,
+  enhancement feedback, and collapsible highlighted code projections.
 - Updated package metadata, command guidance, durable documentation, and the
   changelog.

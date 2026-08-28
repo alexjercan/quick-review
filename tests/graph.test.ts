@@ -173,6 +173,11 @@ test("graph page keeps hostile graph text inside encoded data", () => {
   const page = renderGraphPage(graph, initialGraphState(graph));
   assert.doesNotMatch(page, /<img src=x|<script>alert/);
   assert.match(page, /&lt;img src=x/);
+  assert.doesNotMatch(page, /data-ask/);
+  assert.doesNotMatch(GRAPH_PAGE_JS, /Mark viewed|prompt\(/);
+  assert.match(GRAPH_PAGE_JS, /inline-composer/);
+  assert.match(GRAPH_PAGE_JS, /code-node/);
+  assert.match(GRAPH_PAGE_JS, /e\.target\.closest\('\.node,button/);
   assert.doesNotThrow(() => new Function(GRAPH_PAGE_JS));
 });
 
@@ -253,12 +258,10 @@ test("graph server enhances, persists, asks, and commits", async () => {
       asked.payload.data.state.questions[0].answer,
       "The caller supplies the name.",
     );
-    await act({ action: "mark-viewed", node: "greeting" });
-    await act({ action: "mark-viewed", node: "greeting.format" });
     const result = await act({ action: "approve", comment: "Looks right." });
     assert.equal(result.status, 200);
     assert.equal(approved, true);
-    assert.ok(persisted >= 4);
+    assert.ok(persisted >= 3);
   } finally {
     await server.close();
   }

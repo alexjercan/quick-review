@@ -15,8 +15,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   interrupted. A wait that expires or is cancelled leaves the reviewer's
   question queued.
 - Add progressive target-snapshot and base-to-target project graphs with nested
-  enhancement, synchronized focus tabs, project-tree routing, exact code nodes, questions,
-  comments, minimap navigation, pan, zoom, and draggable graph nodes.
+  enhancement, synchronized focus tabs, project-tree routing, exact code nodes,
+  questions, comments, minimap navigation, pan, zoom, and draggable graph nodes.
 - Add independently versioned graph artifacts, atomic expansion deltas, graph
   state, and graph completion events for Pi and Claude Code.
 
@@ -25,6 +25,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Make the project graph the default `/quick-review` experience and remove the
   linear walkthrough tools from both host adapters. A base option automatically
   selects diff mode; otherwise Quick Review analyzes one target snapshot.
+- Improve canvas panning, use inline Ask and Comment composers, remove the
+  viewed-state approval gate, show enhancement progress, and render collapsible
+  highlighted code projections linked to their source nodes.
 
 ### Packaging
 

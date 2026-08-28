@@ -141,8 +141,9 @@ application and state persistence are atomic.
 ```
 
 State is capped at 512 KiB, 100 questions, 160 comments, 4 KiB per question or
-comment, and 16 KiB per answer. Transient pan, zoom, tab, and node positions
-stay in the browser.
+comment, and 16 KiB per answer. The `viewed` map remains in version 1 state for
+compatibility, but it is not an approval gate. Transient pan, zoom, tab, code
+projection, composer, and node positions stay in the browser.
 
 ## Loopback page
 
@@ -153,14 +154,14 @@ Responses use `no-store`, `nosniff`, `no-referrer`, and a CSP that permits only
 same-origin style, script, and connect. Host must be the listening loopback
 address. Origin, when present, must equal that request's exact origin.
 
-Actions are `enhance`, `mark-viewed`, `reopen-node`, `add-comment`, `ask`,
-`code`, `approve`, and `request-changes`. Requests are capped at 16 KiB and run
+Page actions are `enhance`, `add-comment`, `ask`, `code`, `approve`, and
+`request-changes`. Requests are capped at 16 KiB and run
 one at a time. Every action verifies the exact scope first. Agent-backed and
 terminal actions verify again before mutation or commit. Closing aborts
 in-flight work and fences all later mutation.
 
-Approval requires every visible graph claim to be viewed. A terminal action is
-never replaceable.
+Approval is available while the exact graph is open. A terminal action is never
+replaceable.
 
 ## Graph completion version 1
 
