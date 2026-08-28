@@ -82,6 +82,11 @@
 - Keep every indexed node visible in Project structure. Dim nodes whose graph
   ancestors are still collapsed, and mark open tabs with `T`, the active tab
   with `[T]`, and Project canvas with `C` or `[C]`.
+- Snap tree-navigation targets to the viewport's top-left margin instead of
+  centering them. Large nodes then expose their title and controls first.
+- Use the fixed workspace header as a clickable context breadcrumb, for example
+  `quick-review / Review core / Review lifecycle / planReview`. It remains
+  visible while the graph pans and does not add another label inside the grid.
 - Size nodes from their complete visible summary and highlighted code instead
   of clipping content to one uniform card height. Code blocks expand their node
   in both axes; they do not introduce an internal scrollbar.

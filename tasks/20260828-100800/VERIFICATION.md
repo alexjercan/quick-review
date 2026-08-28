@@ -53,6 +53,13 @@
   each destination.
 - Captured and inspected the fully indexed project tree. Collapsed descendants
   remain available but visually dim until navigation reveals them.
+- Chromium breadcrumb regression - passed. It verifies the initial
+  `quick-review / Review core` context, a four-level path to planReview, and the
+  current crumb. Integration proofs snapped to 22 pixels from the viewport left
+  and 18 pixels from its top. The breadcrumb's screen position stayed fixed
+  after another 600 pixels of canvas scrolling.
+- Captured and inspected the 1600x1000 workspace with the pinned breadcrumb in
+  the existing header and no duplicate graph label.
 
 ## Scope
 

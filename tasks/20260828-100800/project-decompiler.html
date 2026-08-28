@@ -334,8 +334,33 @@
       }
 
       .canvas-title {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        overflow: hidden;
         color: var(--yellow);
         font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .context-crumb {
+        flex: none;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+      }
+
+      .context-crumb:hover,
+      .context-crumb.current {
+        color: var(--yellow);
+      }
+
+      .context-crumb + .context-crumb::before {
+        margin: 0 7px;
+        color: var(--dim);
+        content: "/";
       }
 
       .canvas-help {
@@ -903,7 +928,7 @@
 
       <main class="workspace">
         <div class="workspace-head">
-          <span class="canvas-title">quick-review / HEAD</span>
+          <nav class="canvas-title" data-context aria-label="Current graph context"></nav>
           <span class="canvas-help">Drag nodes. Enhance a node in place. Ask about any level.</span>
           <div class="workspace-tools">
             <button class="toolbar-button" type="button" data-action="collapse" title="Collapse all">--</button>
@@ -1331,6 +1356,7 @@
       const overlay = document.querySelector("[data-overlay]");
       const minimap = document.querySelector("[data-minimap]");
       const minimapSvg = minimap.querySelector("svg");
+      const contextTitle = document.querySelector("[data-context]");
 
       function walk(items = nodes, parent = null, depth = 0, output = []) {
         for (const node of items) {
@@ -1418,6 +1444,7 @@
         }
         renderTree();
         renderTabs();
+        renderContext();
         renderMode();
         renderOverlay();
         canvas.style.setProperty("--zoom", state.zoom);
@@ -1614,6 +1641,35 @@
         if (!found || !button) return;
         overlay.append(renderAsk(found.node, button.getBoundingClientRect()));
         requestAnimationFrame(() => overlay.querySelector("textarea")?.focus());
+      }
+
+      function renderContext() {
+        contextTitle.replaceChildren();
+        const root = document.createElement("button");
+        root.type = "button";
+        root.className = "context-crumb";
+        root.textContent = "quick-review";
+        root.addEventListener("click", () => navigateFromTree("canvas"));
+        contextTitle.append(root);
+        const found = findNode(state.selected);
+        if (!found) {
+          root.classList.add("current");
+          return;
+        }
+        const path = [found.node];
+        let parent = found.parent;
+        while (parent) {
+          path.unshift(parent);
+          parent = findNode(parent.id)?.parent;
+        }
+        for (const [index, node] of path.entries()) {
+          const crumb = document.createElement("button");
+          crumb.type = "button";
+          crumb.className = `context-crumb${index === path.length - 1 ? " current" : ""}`;
+          crumb.textContent = node.title;
+          crumb.addEventListener("click", () => navigateFromTree(node.id));
+          contextTitle.append(crumb);
+        }
       }
 
       function renderTabs() {
@@ -1863,7 +1919,7 @@
         state.selected = id;
         state.ask = null;
         render();
-        requestAnimationFrame(() => centerRenderedNode(id, destination));
+        requestAnimationFrame(() => snapRenderedNode(id, destination));
         const label = destination === "canvas" ? "Project canvas" : `${findNode(destination)?.node.title} tab`;
         status.textContent = `Routed ${found.node.title} to ${label}.`;
       }
@@ -1889,7 +1945,7 @@
         if (contextId === "canvas") reflowRoot();
       }
 
-      function centerRenderedNode(id, contextId) {
+      function snapRenderedNode(id, contextId) {
         const element = canvas.querySelector(`[data-id="${id}"]`);
         if (!element) {
           if (contextId === id) centerCanvasOrigin();
@@ -1898,8 +1954,8 @@
         const nodeRect = element.getBoundingClientRect();
         const viewRect = viewport.getBoundingClientRect();
         viewport.scrollBy({
-          left: nodeRect.left + nodeRect.width / 2 - (viewRect.left + viewRect.width / 2),
-          top: nodeRect.top + nodeRect.height / 2 - (viewRect.top + viewRect.height / 2),
+          left: nodeRect.left - viewRect.left - 22,
+          top: nodeRect.top - viewRect.top - 18,
           behavior: "smooth",
         });
       }
