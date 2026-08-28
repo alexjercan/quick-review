@@ -292,6 +292,7 @@
       }
 
       .workspace {
+        position: relative;
         grid-area: work;
         display: grid;
         grid-template-rows: 35px 32px minmax(0, 1fr);
@@ -392,6 +393,7 @@
         overflow: auto;
         cursor: grab;
         overscroll-behavior: none;
+        scrollbar-width: none;
         background-color: var(--canvas);
         background-image:
           linear-gradient(rgba(255, 221, 51, 0.025) 1px, transparent 1px),
@@ -401,9 +403,61 @@
         background-size: 90px 90px, 90px 90px, 18px 18px;
       }
 
+      .viewport::-webkit-scrollbar {
+        display: none;
+      }
+
       .viewport.panning {
         cursor: grabbing;
         user-select: none;
+      }
+
+      .minimap {
+        position: absolute;
+        z-index: 2000;
+        right: 12px;
+        bottom: 12px;
+        width: 148px;
+        height: 96px;
+        border: 1px solid var(--line);
+        background: rgba(24, 24, 24, 0.9);
+        box-shadow: 0 5px 18px var(--shadow);
+        cursor: crosshair;
+        opacity: 0.78;
+        transition: opacity 100ms ease;
+      }
+
+      .minimap:hover {
+        opacity: 1;
+      }
+
+      .minimap svg {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      .minimap-node {
+        fill: #686868;
+        stroke: #909090;
+        stroke-width: 3;
+      }
+
+      .minimap-node.changed {
+        fill: #7c292d;
+        stroke: var(--red);
+      }
+
+      .minimap-node.impacted {
+        fill: #75672b;
+        stroke: var(--yellow-2);
+      }
+
+      .minimap-window {
+        fill: rgba(255, 221, 51, 0.08);
+        stroke: var(--yellow);
+        stroke-width: 5;
+        vector-effect: non-scaling-stroke;
       }
 
       .canvas {
@@ -849,6 +903,9 @@
             </svg>
           </div>
         </div>
+        <div class="minimap" data-minimap title="Click to recenter the canvas">
+          <svg aria-label="Canvas minimap"></svg>
+        </div>
       </main>
 
       <footer class="statusbar">
@@ -1249,6 +1306,8 @@
       const viewport = document.querySelector("[data-viewport]");
       const tabs = document.querySelector("[data-tabs]");
       const overlay = document.querySelector("[data-overlay]");
+      const minimap = document.querySelector("[data-minimap]");
+      const minimapSvg = minimap.querySelector("svg");
 
       function walk(items = nodes, parent = null, depth = 0, output = []) {
         for (const node of items) {
@@ -1341,6 +1400,46 @@
         canvas.style.setProperty("--zoom", state.zoom);
         const visible = walk().filter(({ node }) => matchesFilter(node)).length;
         count.textContent = `${visible} visible nodes / ${walk().length} indexed`;
+        renderMinimap();
+      }
+
+      function rootProjection() {
+        if (state.activeTab === "canvas") return { items: nodes };
+        const focused = findNode(state.activeTab)?.node;
+        if (!focused) return { items: nodes };
+        if (focused.children?.length && focused.expanded) return { items: focused.children };
+        return { items: [focused], override: { x: 45, y: 70 } };
+      }
+
+      function renderMinimap() {
+        minimapSvg.replaceChildren();
+        const width = parseFloat(canvas.style.width) || 2300;
+        const height = parseFloat(canvas.style.height) || 1500;
+        minimapSvg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+        const projection = rootProjection();
+        for (const item of projection.items) {
+          const size = measure(item);
+          const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+          rect.setAttribute("class", `minimap-node ${item.status}`);
+          rect.setAttribute("x", String(projection.override?.x ?? item.x));
+          rect.setAttribute("y", String(projection.override?.y ?? item.y));
+          rect.setAttribute("width", String(size.width));
+          rect.setAttribute("height", String(size.height));
+          minimapSvg.append(rect);
+        }
+        const windowRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        windowRect.setAttribute("class", "minimap-window");
+        minimapSvg.append(windowRect);
+        renderMinimapWindow();
+      }
+
+      function renderMinimapWindow() {
+        const windowRect = minimapSvg.querySelector(".minimap-window");
+        if (!windowRect) return;
+        windowRect.setAttribute("x", String(viewport.scrollLeft / state.zoom));
+        windowRect.setAttribute("y", String(viewport.scrollTop / state.zoom));
+        windowRect.setAttribute("width", String(viewport.clientWidth / state.zoom));
+        windowRect.setAttribute("height", String(viewport.clientHeight / state.zoom));
       }
 
       function updateRootBounds(items, override) {
@@ -1577,6 +1676,7 @@
             element.style.left = `${node.x}px`;
             element.style.top = `${node.y}px`;
             redrawParentEdges(parent);
+            renderMinimap();
           };
           const up = () => {
             handle.removeEventListener("pointermove", move);
@@ -1837,8 +1937,21 @@
         canvas.style.setProperty("--zoom", state.zoom);
         viewport.scrollLeft = worldX * nextZoom - cursorX;
         viewport.scrollTop = worldY * nextZoom - cursorY;
+        renderMinimapWindow();
         status.textContent = `Canvas zoom: ${Math.round(state.zoom * 100)}%.`;
       }, { passive: false });
+
+      viewport.addEventListener("scroll", renderMinimapWindow, { passive: true });
+
+      minimap.addEventListener("click", (event) => {
+        const point = minimapSvg.createSVGPoint();
+        point.x = event.clientX;
+        point.y = event.clientY;
+        const world = point.matrixTransform(minimapSvg.getScreenCTM().inverse());
+        viewport.scrollLeft = world.x * state.zoom - viewport.clientWidth / 2;
+        viewport.scrollTop = world.y * state.zoom - viewport.clientHeight / 2;
+        renderMinimapWindow();
+      });
 
       document.addEventListener("keydown", (event) => {
         if (event.key.toLowerCase() === "f" && !event.target.closest("input, textarea")) {

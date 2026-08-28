@@ -62,7 +62,13 @@
   packs the root graph into non-overlapping rows.
 - Grow the logical canvas and root SVG view box from current node bounds. Nodes
   dragged below or to the right of the initial canvas keep their edges and add
-  scrollable canvas area.
+  pannable canvas area.
+- Hide native canvas scrollbars because background dragging is the primary
+  navigation. Keep scrolling internally so pan, wheel zoom, focus, and minimap
+  recentering use the same viewport state.
+- Show a minimal 148x96 minimap in the lower-right corner. It contains only
+  root-node bounds and the current viewport rectangle. Clicking it recenters the
+  canvas; it has no labels or secondary controls.
 - Size nodes from their complete visible summary and highlighted code instead
   of clipping content to one uniform card height. Code blocks expand their node
   in both axes; they do not introduce an internal scrollbar.

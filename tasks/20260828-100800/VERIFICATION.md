@@ -40,6 +40,12 @@
 - Focused collapsed Review lifecycle - passed: the tab showed only the lifecycle
   node. Enhanced it in that tab - passed: the same tab switched to its four
   child nodes and updated its label to `Review lifecycle / contents`.
+- Chromium minimap regression - passed. It verifies the 148x96 bound, six root
+  markers, viewport tracking after pan, click-to-recenter, dynamic view-box
+  growth after a deep node move, and hidden scrollbars for both WebKit and
+  Firefox CSS properties.
+- Captured and inspected the 1600x1000 canvas with the lower-right minimap and
+  no native viewport scrollbars.
 
 ## Scope
 
