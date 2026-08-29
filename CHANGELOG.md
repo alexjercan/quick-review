@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-29
+
 ### Added
 
 - Add a Claude Code adapter: a dependency-free stdio MCP server, the
@@ -25,9 +27,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 
-- Make the project graph the default `/quick-review` experience and remove the
-  linear walkthrough tools from both host adapters. A base option automatically
-  selects diff mode; otherwise Quick Review analyzes one target snapshot.
+- **Breaking:** Make the project graph the default `/quick-review` experience
+  and remove the linear walkthrough tools from both host adapters. A base option
+  automatically selects diff mode; otherwise Quick Review analyzes one target
+  snapshot.
 - Improve canvas panning, use inline Ask and Comment composers, remove the
   viewed-state approval gate, show enhancement progress, and render collapsible
   highlighted code projections linked to their source nodes.
@@ -68,6 +71,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Ship Quick Review as a Pi package and as a Nix flake package for Linux and macOS.
 - Check locked Node dependencies and Nix packaging in GitHub Actions.
 
-[unreleased]: https://github.com/alexjercan/quick-review/compare/v0.1.1...HEAD
+[unreleased]: https://github.com/alexjercan/quick-review/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/alexjercan/quick-review/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/alexjercan/quick-review/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/alexjercan/quick-review/releases/tag/v0.1.0

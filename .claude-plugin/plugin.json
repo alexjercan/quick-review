@@ -1,6 +1,6 @@
 {
   "name": "quick-review",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Open progressive exact-revision project graphs built by the current session agent.",
   "author": {
     "name": "Alex Jercan"
